@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+    <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
+
+    <style>
+        .demo-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .button-group {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mdl-layout mdl-js-layout mdl-layout--fixed-header">
+        <header class="mdl-layout__header">
+            <div class="mdl-layout__header-row">
+                <!-- Title -->
+                <span class="mdl-layout-title">Gemini Live Demo</span>
+            </div>
+        </header>
+        <main class="mdl-layout__content">
+            <div class="page-content">
+                <div class="demo-content">
+                    <!-- Voice Control Buttons -->
+                    <div class="button-group">
+                        <button id="startButton"
+                            class="mdl-button mdl-js-button mdl-button--fab mdl-button--mini-fab mdl-button--colored">
+                            <i class="material-icons">mic</i>
+                        </button>
+                        <button id="stopButton"
+                            class="mdl-button mdl-js-button mdl-button--fab mdl-button--mini-fab">
+                            <i class="material-icons">mic_off</i>
+                        </button>
+                    </div>
+
+                    <!-- Test Mode Toggle -->
+                    <div style="padding-bottom: 20px;">
+                        <label class="mdl-checkbox mdl-js-checkbox mdl-js-ripple-effect" for="testModeCheckbox">
+                            <input type="checkbox" id="testModeCheckbox" class="mdl-checkbox__input" checked>
+                            <span class="mdl-checkbox__label">Test Mode</span>
+                        </label>
+                    </div>
+
+                    <!-- Light Status -->
+                    <div id="lightStatus" style="margin-top: 20px;">
+                        <h4>Light Status</h4>
+                        <p>Brightness: <span id="brightnessStatus">N/A</span></p>
+                        <p>Color: <span id="colorStatus">N/A</span></p>
+                    </div>
+
+                    <!-- Text Output -->
+                    <div id="chatLog"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script defer>
+        const URL = "ws://localhost:9082";
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        let webSocket = null;
+        let audioContext = null;
+        let playbackWorkletNode = null;
+        let recordingWorkletNode = null;
+        let mediaStream = null;
+
+        window.addEventListener("load", async () => {
+            const testModeCheckbox = document.getElementById('testModeCheckbox');
+            
+            // Update component state for MDL
+            componentHandler.upgradeDom();
+
+            testModeCheckbox.addEventListener('change', (event) => {
+                if (event.currentTarget.checked) {
+                    if (webSocket) {
+                        webSocket.close();
+                        webSocket = null;
+                        console.log("Test mode enabled. WebSocket disconnected.");
+                    }
+                } else {
+                    console.log("Test mode disabled. Connecting WebSocket.");
+                    connect();
+                }
+            });
+        });
+
+        function connect() {
+            if (document.getElementById('testModeCheckbox').checked) {
+                console.log("Test mode is on. Skipping WebSocket connection.");
+                return;
+            }
+            console.log("connecting: ", URL);
+
+            webSocket = new WebSocket(URL);
+
+            webSocket.onclose = (event) => {
+                console.log("websocket closed: ", event);
+                if (!document.getElementById('testModeCheckbox').checked) {
+                    alert("Connection closed");
+                }
+            };
+
+            webSocket.onerror = (event) => {
+                console.log("websocket error: ", event);
+            };
+
+            webSocket.onopen = (event) => {
+                console.log("websocket open: ", event);
+                sendInitialSetupMessage();
+            };
+
+            webSocket.onmessage = receiveMessage;
+        }
+
+        function sendInitialSetupMessage() {
+
+            console.log("sending setup message");
+            setup_client_message = {
+                setup: {
+                    generation_config: { response_modalities: ["AUDIO"] },
+                  },
+                };
+
+            webSocket.send(JSON.stringify(setup_client_message));
+        }
+
+
+        function sendVoiceMessage(pcmData) {
+            const buffer = pcmData.buffer;
+            const base64 = btoa(
+                String.fromCharCode.apply(null, new Uint8Array(buffer))
+            );
+
+            if (document.getElementById('testModeCheckbox').checked) {
+                console.log("Test mode: looping back audio with a 500ms delay.");
+                setTimeout(() => {
+                    injestAudioChuckToPlay(base64);
+                }, 500);
+                return;
+            }
+
+            if (webSocket == null || webSocket.readyState !== WebSocket.OPEN) {
+                console.log("websocket not initialized or not open");
+                return;
+            }
+
+            const payload = {
+                realtime_input: {
+                    media_chunks: [{
+                            mime_type: "audio/pcm",
+                            data: base64,
+                        }
+                    ],
+                },
+            };
+
+            webSocket.send(JSON.stringify(payload));
+            console.log("sent: ", payload);
+        }
+
+        function receiveMessage(event) {
+            const messageData = JSON.parse(event.data);
+            const response = new Response(messageData);
+
+            if (response.text) {
+                try {
+                    // Check if the text is a JSON string for tool calls
+                    const toolCallData = JSON.parse(response.text);
+                    if (Array.isArray(toolCallData) && toolCallData.length > 0) {
+                        const toolCall = toolCallData[0];
+                        if (toolCall.name === 'set_light_values' && toolCall.response && toolCall.response.result) {
+                            const { brightness, colorTemperature } = toolCall.response.result;
+                            document.getElementById('brightnessStatus').textContent = brightness;
+                            document.getElementById('colorStatus').textContent = colorTemperature;
+                        }
+                    }
+                } catch (e) {
+                    // Not a JSON string, so it's a regular text message
+                    displayMessage("GEMINI: " + response.text);
+                }
+            }
+            if (response.audioData) {
+                injestAudioChuckToPlay(response.audioData);
+            }
+        }
+
+        function base64ToArrayBuffer(base64) {
+          const binaryString = window.atob(base64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+          }
+          return bytes.buffer;
+        }
+
+        function convertPCM16LEToFloat32(pcmData) {
+           const inputArray = new Int16Array(pcmData);
+           const float32Array = new Float32Array(inputArray.length);
+
+           for (let i = 0; i < inputArray.length; i++) {
+              float32Array[i] = inputArray[i] / 32768;
+           }
+
+          return float32Array;
+        }
+
+
+        async function injestAudioChuckToPlay(base64AudioChunk) {
+           try {
+            console.log("injestAudioChuckToPlay: Received audio chunk for playback.");
+              if (!playbackWorkletNode) {
+                console.error("Playback worklet node not initialized.");
+                return;
+              }
+              if (audioContext && audioContext.state === "suspended") {
+                 await audioContext.resume();
+                 console.log("injestAudioChuckToPlay: Resumed playback audio context.");
+              }
+              const arrayBuffer = base64ToArrayBuffer(base64AudioChunk);
+             const float32Data = convertPCM16LEToFloat32(arrayBuffer);
+
+             playbackWorkletNode.port.postMessage(float32Data);
+             console.log("injestAudioChuckToPlay: Sent audio data to playback processor.");
+            } catch (error) {
+               console.error("Error processing audio chunk:", error);
+            }
+        }
+
+
+        async function startAudioInput() {
+            try {
+                console.log("startAudioInput: Attempting to start audio input...");
+                
+                // Create and resume a single AudioContext
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: 16000
+                    });
+                    console.log("startAudioInput: AudioContext created with 16000 sample rate.");
+                }
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                    console.log("startAudioInput: AudioContext resumed.");
+                }
+
+                // Get microphone permission and the audio stream
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        channelCount: 1,
+                        sampleRate: 16000
+                    }
+                });
+                console.log("startAudioInput: Successfully got user media (microphone).");
+
+                // Load both worklet modules
+                await Promise.all([
+                    audioContext.audioWorklet.addModule('/recording-processor.js'),
+                    audioContext.audioWorklet.addModule('/pcm-processor.js')
+                ]);
+                console.log("startAudioInput: All audio worklet modules added.");
+                
+                // Setup recording pipeline
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                console.log("startAudioInput: MediaStreamSource created.");
+                recordingWorkletNode = new AudioWorkletNode(audioContext, 'recording-processor', {
+                    processorOptions: {
+                        sampleRate: 16000
+                    }
+                });
+                console.log("startAudioInput: RecordingWorkletNode created.");
+                recordingWorkletNode.port.onmessage = (event) => {
+                    console.log("startAudioInput: Received message from recording processor.");
+                    sendVoiceMessage(event.data);
+                };
+                source.connect(recordingWorkletNode);
+                console.log("startAudioInput: Recording pipeline connected.");
+
+                // Setup playback pipeline
+                playbackWorkletNode = new AudioWorkletNode(audioContext, "pcm-processor");
+                console.log("startAudioInput: PlaybackWorkletNode created.");
+                playbackWorkletNode.connect(audioContext.destination);
+                console.log("startAudioInput: Playback pipeline connected.");
+
+
+            } catch (error) {
+                console.error("Error starting audio input:", error);
+                alert("Could not start audio recording: " + error.message);
+            }
+        }
+
+        function stopAudioInput() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+            if (recordingWorkletNode) {
+                recordingWorkletNode.disconnect();
+                recordingWorkletNode = null;
+            }
+            if (playbackWorkletNode) {
+                playbackWorkletNode.disconnect();
+                playbackWorkletNode = null;
+            }
+            if (audioContext) {
+                audioContext.close().then(() => {
+                    audioContext = null;
+                });
+            }
+        }
+
+        function displayMessage(message) {
+           console.log(message);
+            addParagraphToDiv("chatLog", message);
+        }
+
+        function updateLightStatus(status) {
+            const brightness = status.brightness !== undefined ? status.brightness : "N/A";
+            const color = status.color !== undefined ? status.color : "N/A";
+
+            document.getElementById("brightnessStatus").textContent = brightness;
+            document.getElementById("colorStatus").textContent = color;
+        }
+
+        function addParagraphToDiv(divId, text) {
+           const newParagraph = document.createElement("p");
+           newParagraph.textContent = text;
+           const div = document.getElementById(divId);
+           div.appendChild(newParagraph);
+        }
+
+        startButton.addEventListener('click', startAudioInput);
+        stopButton.addEventListener('click', stopAudioInput);
+
+
+        class Response {
+            constructor(data) {
+               this.text = null;
+               this.audioData = null;
+                this.endOfTurn = null;
+
+               if(data.text){
+                  this.text = data.text
+               }
+
+                if (data.audio) {
+                   this.audioData = data.audio;
+                }
+            }
+         }
+    </script>
+</body>
+
+</html>
