@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <meta charset="UTF-8" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
     <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
@@ -17,6 +18,57 @@
         .button-group {
             margin-bottom: 20px;
         }
+
+        .profile-card {
+            width: 100%;
+            max-width: 780px;
+            background: linear-gradient(135deg,#ffe5ec,#ffe9f7 55%,#ffd1e8);
+            border: 2px solid #ff8fb5;
+            border-radius: 14px;
+            padding: 16px 20px 20px 20px;
+            box-shadow: 0 4px 10px rgba(255,105,180,0.25);
+            position: relative;
+        }
+        .profile-card:before {
+            content: "❤";
+            position: absolute;
+            top: -14px;
+            right: 14px;
+            font-size: 28px;
+            color: #ff4f86;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.15));
+        }
+        .profile-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(170px,1fr));
+            gap: 12px 18px;
+            margin-top: 8px;
+        }
+        .field-block label { font-weight: 600; font-size: 13px; letter-spacing: .5px; text-transform: uppercase; color:#b52358; }
+        .field-block input, .field-block select, .field-block textarea {
+            width: 100%;
+            border: 1px solid #ff9fc6;
+            background: #fff;
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .field-block.missing label::after { content: ' • missing'; color:#d62839; font-weight:400; text-transform:none; }
+        .profile-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+        .pill-btn { cursor:pointer; background:#ff4f86; border:none; color:#fff; padding:8px 14px; border-radius:24px; font-weight:600; letter-spacing:.5px; box-shadow:0 2px 6px rgba(0,0,0,.15); }
+        .pill-btn.alt { background:#ff9fc6; color:#5a0630; }
+        .pill-btn.danger { background:#d62839; }
+        .profile-status { margin-top:8px; font-size:12px; color:#7a1e3f; font-style:italic; }
+        .inline-badge { display:inline-block; background:#fff; border:1px solid #ff7aa8; border-radius:12px; padding:2px 8px; font-size:11px; margin-right:4px; margin-top:4px; }
+        .divider-heart { text-align:center; margin:14px 0 4px 0; font-size:18px; color:#ff4f86; }
+        .readonly-chip { background:#ffeaf1; border:1px solid #ff9fc6; padding:4px 10px; border-radius:20px; font-size:12px; display:inline-flex; gap:6px; align-items:center; }
+        .readonly-chip span { font-weight:600; }
+        .fade-in { animation: fade .45s ease; }
+        @keyframes fade { from {opacity:0; transform:translateY(4px);} to {opacity:1; transform:translateY(0);} }
+        .small-note { font-size:11px; color:#90324f; margin-top:4px; }
+    .romance-title { font-family: 'Georgia', serif; font-weight:700; font-size:20px; background:linear-gradient(90deg,#b30047,#ff4f86); -webkit-background-clip: text; background-clip:text; color:transparent; letter-spacing:.5px; }
+    </style>
     </style>
 </head>
 
@@ -31,6 +83,60 @@
         <main class="mdl-layout__content">
             <div class="page-content">
                 <div class="demo-content">
+                    <!-- Model Selector -->
+                    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+                        <label for="modelSelect">Model:</label>
+                        <select id="modelSelect" class="mdl-textfield__input">
+                            <option value="gemini-2.5-flash-preview-native-audio-dialog" selected>
+                                gemini-2.5-flash-preview-native-audio-dialog
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Voice Selector -->
+                    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+                        <label for="voiceSelect">Voice:</label>
+                        <select id="voiceSelect" class="mdl-textfield__input">
+                            <option value="Puck" selected>Puck</option>
+                            <option value="Achernar">Achernar</option>
+                            <option value="Achird">Achird</option>
+                            <option value="Algenib">Algenib</option>
+                            <option value="Algieba">Algieba</option>
+                            <option value="Alnilam">Alnilam</option>
+                            <option value="Aoede">Aoede</option>
+                            <option value="Autonoe">Autonoe</option>
+                            <option value="Callirrhoe">Callirrhoe</option>
+                            <option value="Charon">Charon</option>
+                            <option value="Despina">Despina</option>
+                            <option value="Enceladus">Enceladus</option>
+                            <option value="Erinome">Erinome</option>
+                            <option value="Fenrir">Fenrir</option>
+                            <option value="Gacrux">Gacrux</option>
+                            <option value="Iapetus">Iapetus</option>
+                            <option value="Kore">Kore</option>
+                            <option value="Laomedeia">Laomedeia</option>
+                            <option value="Leda">Leda</option>
+                            <option value="Orus">Orus</option>
+                            <option value="Pulcherrima">Pulcherrima</option>
+                            <option value="Rasalgethi">Rasalgethi</option>
+                            <option value="Sadachbia">Sadachbia</option>
+                            <option value="Sadaltager">Sadaltager</option>
+                            <option value="Schedar">Schedar</option>
+                            <option value="Sulafat">Sulafat</option>
+                            <option value="Umbriel">Umbriel</option>
+                            <option value="Vindemiatrix">Vindemiatrix</option>
+                            <option value="Zephyr">Zephyr</option>
+                            <option value="Zubenelgenubi">Zubenelgenubi</option>
+                        </select>
+                    </div>
+
+                    <!-- VAD Toggle -->
+                    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+                        <label class="mdl-checkbox mdl-js-checkbox mdl-js-ripple-effect" for="vadCheckbox">
+                            <input type="checkbox" id="vadCheckbox" class="mdl-checkbox__input">
+                            <span class="mdl-checkbox__label">Enable VAD (auto start/stop)</span>
+                        </label>
+                    </div>
                     <!-- Voice Control Buttons -->
                     <div class="button-group">
                         <button id="startButton"
@@ -51,14 +157,57 @@
                         </label>
                     </div>
 
-                    <!-- Light Status -->
-                    <div id="lightStatus" style="margin-top: 20px;">
-                        <h4>Light Status</h4>
-                        <p>Brightness: <span id="brightnessStatus">N/A</span></p>
-                        <p>Color: <span id="colorStatus">N/A</span></p>
+                    <!-- Removed light status (legacy) -->
+
+                    <!-- Dating Profile Card -->
+                    <div class="profile-card" id="profileCard">
+                        <div class="romance-title">Dating Profile Builder</div>
+                        <div class="small-note">Speak naturally. The assistant will fill or refine the profile via a structured tool call.</div>
+                        <div class="profile-grid" id="profileFields">
+                            <div class="field-block" id="field_eye_color">
+                                <label for="eyeColorInput">Eye Color</label>
+                                <select id="eyeColorInput">
+                                    <option value="">(select)</option>
+                                    <option value="blue">Blue</option>
+                                    <option value="brown">Brown</option>
+                                    <option value="green">Green</option>
+                                    <option value="hazel">Hazel</option>
+                                </select>
+                            </div>
+                            <div class="field-block" id="field_age">
+                                <label for="ageInput">Age</label>
+                                <input id="ageInput" type="number" min="1" max="120" placeholder="e.g. 29">
+                            </div>
+                            <div class="field-block" id="field_todays_date">
+                                <label for="todayDateInput">Today's Date</label>
+                                <input id="todayDateInput" type="text" placeholder="YYYY-MM-DD">
+                            </div>
+                            <div class="field-block" style="grid-column:1 / -1;" id="field_ideal_date">
+                                <label for="idealDateInput">Ideal Date</label>
+                                <textarea id="idealDateInput" rows="2" placeholder="Sunset walk, cozy cafe..." ></textarea>
+                            </div>
+                        </div>
+                        <div class="profile-actions">
+                            <button class="pill-btn" id="btnSuggestMissing">Suggest Missing</button>
+                            <button class="pill-btn alt" id="btnSubmitHints">Use My Inputs</button>
+                            <button class="pill-btn danger" id="btnResetProfile" title="Clear local profile state">Reset</button>
+                        </div>
+                        <div class="profile-status" id="profileStatus"></div>
+                        <div class="divider-heart">♡</div>
+                        <div id="profileBadges"></div>
                     </div>
 
                     <!-- Text Output -->
+                    <div style="width: 100%; max-width: 780px;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                            <strong>Response modality:</strong>
+                            <span id="modalityLabel">AUDIO</span>
+                            <button id="clearTextBtn" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" style="margin-left:auto;">
+                                Clear Text
+                            </button>
+                        </div>
+                        <div id="responseTextBox" style="min-height: 120px; border: 1px solid #ddd; border-radius: 4px; padding: 8px; overflow-y:auto; white-space:pre-wrap;"></div>
+                    </div>
                     <div id="chatLog"></div>
                 </div>
             </div>
@@ -74,6 +223,158 @@
         let playbackWorkletNode = null;
         let recordingWorkletNode = null;
         let mediaStream = null;
+    const clearTextBtn = document.getElementById('clearTextBtn');
+    const modalityLabel = document.getElementById('modalityLabel');
+    const responseTextBox = document.getElementById('responseTextBox');
+
+        // Profile form elements
+    const eyeColorInput = document.getElementById('eyeColorInput');
+        const ageInput = document.getElementById('ageInput');
+        const idealDateInput = document.getElementById('idealDateInput');
+        const todayDateInput = document.getElementById('todayDateInput');
+        const btnSuggestMissing = document.getElementById('btnSuggestMissing');
+        const btnSubmitHints = document.getElementById('btnSubmitHints');
+        const btnResetProfile = document.getElementById('btnResetProfile');
+        const profileStatus = document.getElementById('profileStatus');
+        const profileBadges = document.getElementById('profileBadges');
+
+        // Local profile state mirror
+        const profileState = { eye_color: null, age: null, ideal_date: null, todays_date: null };
+    let completionPromptShown = false;
+    let sessionCompleted = false;
+
+    function updateProfileUI() {
+            // Always overwrite inputs with latest tool-confirmed state (explicit user-provided values only)
+            if (profileState.eye_color !== null) eyeColorInput.value = profileState.eye_color;
+            if (profileState.age !== null) ageInput.value = profileState.age;
+            if (profileState.ideal_date !== null) idealDateInput.value = profileState.ideal_date;
+            if (profileState.todays_date !== null) todayDateInput.value = profileState.todays_date;
+
+            const missing = Object.entries(profileState).filter(([k,v]) => !v);
+            const filled = Object.entries(profileState).filter(([k,v]) => v);
+
+            // Field badge display
+            profileBadges.innerHTML = '';
+            filled.forEach(([k,v]) => {
+                const badge = document.createElement('span');
+                badge.className = 'inline-badge fade-in';
+                badge.textContent = k + ': ' + (''+v).slice(0,40);
+                profileBadges.appendChild(badge);
+            });
+
+            // Mark missing visually
+            ['eye_color','age','ideal_date','todays_date'].forEach(f => {
+                const el = document.getElementById('field_'+f.replace('todays_date','todays_date'));
+                if (!el) return;
+                if (!profileState[f]) el.classList.add('missing'); else el.classList.remove('missing');
+            });
+
+            profileStatus.textContent = missing.length ? `${missing.length} field(s) still missing.` : 'All profile fields filled.';
+
+            // Trigger completion prompt once
+            if (!missing.length && !completionPromptShown && !sessionCompleted) {
+                showCompletionPrompt();
+            }
+        }
+    function resetProfileState() {
+            profileState.eye_color = null; profileState.age = null; profileState.ideal_date = null; profileState.todays_date = null;
+            eyeColorInput.value=''; ageInput.value=''; idealDateInput.value=''; todayDateInput.value='';
+            updateProfileUI();
+        }
+    function buildMissingFieldsPrompt() {
+            const missing = Object.entries(profileState).filter(([_,v]) => !v).map(([k])=>k);
+            if (!missing.length) return 'All fields already filled; refine ideal_date slightly keeping style concise.';
+            return 'Please fill ONLY these missing profile fields now: '+ missing.join(', ') + '. Respond by calling the tool.';
+        }
+    function buildUserHintPrompt() {
+            // Validate and compile user-provided hints
+            const hints = {};
+            const eye = eyeColorInput.value.trim().toLowerCase();
+            if (eye && ['blue','brown','green','hazel'].includes(eye)) hints.eye_color = eye;
+            const ageVal = ageInput.value.trim();
+            if (ageVal) {
+                const n = parseInt(ageVal,10); if (!isNaN(n) && n>0 && n<=120) hints.age = n; else alert('Age must be 1-120');
+            }
+            const ideal = idealDateInput.value.trim(); if (ideal) hints.ideal_date = ideal;
+            const td = todayDateInput.value.trim(); if (td) hints.todays_date = td;
+            if (!Object.keys(hints).length) return 'No new user hints; proceed to fill any missing fields.';
+            return 'Use these user-provided values (validate & adjust only if invalid) then call tool: '+ JSON.stringify(hints);
+        }
+    function sendTextPrompt(text) {
+            if (!webSocket || webSocket.readyState !== WebSocket.OPEN) { console.warn('WS not open'); return; }
+            webSocket.send(JSON.stringify({ realtime_input: { text } }));
+        }
+    btnSuggestMissing.addEventListener('click', ()=> { sendTextPrompt(buildMissingFieldsPrompt()); });
+        btnSubmitHints.addEventListener('click', ()=> { sendTextPrompt(buildUserHintPrompt()); });
+        btnResetProfile.addEventListener('click', ()=> { resetProfileState(); });
+    // Start with ALL fields blank; do not prefill today's date (user must state it explicitly)
+    updateProfileUI();
+
+        function showCompletionPrompt() {
+            completionPromptShown = true;
+            const container = document.createElement('div');
+            container.id = 'completionPrompt';
+            container.className = 'fade-in';
+            container.style.marginTop = '14px';
+            container.style.padding = '12px 14px';
+            container.style.border = '1px solid #ff7aa8';
+            container.style.background = '#fff5f9';
+            container.style.borderRadius = '10px';
+            container.innerHTML = `
+                <strong>Profile complete.</strong><br/>
+                Please confirm everything looks correct.
+                <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+                   <button class="pill-btn" id="btnConfirmProfile">Confirm & Finish</button>
+                   <button class="pill-btn alt" id="btnRestartProfile">Start Over</button>
+                </div>
+            `;
+            profileCard.appendChild(container);
+            const confirmBtn = container.querySelector('#btnConfirmProfile');
+            const restartBtn = container.querySelector('#btnRestartProfile');
+            confirmBtn.addEventListener('click', confirmAndCloseSession);
+            restartBtn.addEventListener('click', restartSession);
+        }
+
+        function confirmAndCloseSession() {
+            sessionCompleted = true;
+            // Stop audio and close websocket gracefully
+            try { stopAudioInput(); } catch(e) {}
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                try { webSocket.close(1000, 'profile complete'); } catch(e) {}
+            }
+            profileStatus.textContent = 'Profile complete, voice assistant disconnected.';
+            addCompletionBanner();
+        }
+
+        function restartSession() {
+            // Remove completion UI and reset state
+            sessionCompleted = false;
+            completionPromptShown = false;
+            const prompt = document.getElementById('completionPrompt');
+            if (prompt) prompt.remove();
+            resetProfileState();
+            profileStatus.textContent = 'Session restarted. Provide or request fields again.';
+            if (!document.getElementById('testModeCheckbox').checked) {
+                connect();
+            }
+        }
+
+        function addCompletionBanner() {
+            let banner = document.getElementById('completionBanner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'completionBanner';
+                banner.style.marginTop = '10px';
+                banner.style.padding = '10px 14px';
+                banner.style.background = '#e3ffe9';
+                banner.style.border = '1px solid #57c27c';
+                banner.style.borderRadius = '8px';
+                banner.style.fontSize = '13px';
+                banner.style.color = '#225c38';
+                banner.innerHTML = '✔ Profile confirmed. Assistant session closed.';
+                profileCard.appendChild(banner);
+            }
+        }
 
         window.addEventListener("load", async () => {
             const testModeCheckbox = document.getElementById('testModeCheckbox');
@@ -95,7 +396,7 @@
             });
         });
 
-        function connect() {
+    function connect() {
             if (document.getElementById('testModeCheckbox').checked) {
                 console.log("Test mode is on. Skipping WebSocket connection.");
                 return;
@@ -124,14 +425,23 @@
         }
 
         function sendInitialSetupMessage() {
-
             console.log("sending setup message");
-            setup_client_message = {
-                setup: {
-                    generation_config: { response_modalities: ["AUDIO"] },
-                  },
-                };
+            const model = document.getElementById('modelSelect').value;
+            const voiceName = document.getElementById('voiceSelect').value;
+            const enableVad = document.getElementById('vadCheckbox').checked;
 
+            // Only AUDIO modality for native audio dialog model
+            const responseModalities = ["AUDIO"]; modalityLabel.textContent = 'AUDIO';
+
+            const setup_client_message = {
+                setup: {
+                    // Server flattens generation_config
+                    generation_config: { response_modalities: responseModalities, temperature: 0.9 },
+                    model: model,
+                    voice_name: voiceName,
+                    enable_vad: enableVad
+                }
+            };
             webSocket.send(JSON.stringify(setup_client_message));
         }
 
@@ -169,9 +479,18 @@
             console.log("sent: ", payload);
         }
 
-        function receiveMessage(event) {
+    function receiveMessage(event) {
             const messageData = JSON.parse(event.data);
             const response = new Response(messageData);
+
+            // Tool response for profile
+            if (messageData.profile_tool_response) {
+                try {
+                    const r = messageData.profile_tool_response;
+                    ['eye_color','age','ideal_date','todays_date'].forEach(k=>{ if (r[k]!==undefined && r[k]!==null) profileState[k]=r[k]; });
+                    updateProfileUI();
+                } catch(err){ console.warn('Error applying profile tool response', err); }
+            }
 
             if (response.text) {
                 try {
@@ -187,12 +506,22 @@
                     }
                 } catch (e) {
                     // Not a JSON string, so it's a regular text message
-                    displayMessage("GEMINI: " + response.text);
+                    if (modalityLabel.textContent === 'TEXT') {
+                        appendToResponseBox(response.text);
+                    } else {
+                        displayMessage("GEMINI: " + response.text);
+                    }
                 }
             }
             if (response.audioData) {
-                injestAudioChuckToPlay(response.audioData);
+                injestAudioChuckToPlay(response.audioData, messageData.audio_mime_type || 'audio/pcm');
             }
+        }
+
+        function appendToResponseBox(text) {
+            if (!text) return;
+            responseTextBox.textContent += text;
+            responseTextBox.scrollTop = responseTextBox.scrollHeight;
         }
 
         function base64ToArrayBuffer(base64) {
@@ -216,7 +545,7 @@
         }
 
 
-        async function injestAudioChuckToPlay(base64AudioChunk) {
+        async function injestAudioChuckToPlay(base64AudioChunk, mimeType) {
            try {
             console.log("injestAudioChuckToPlay: Received audio chunk for playback.");
               if (!playbackWorkletNode) {
@@ -228,8 +557,23 @@
                  console.log("injestAudioChuckToPlay: Resumed playback audio context.");
               }
               const arrayBuffer = base64ToArrayBuffer(base64AudioChunk);
-             const float32Data = convertPCM16LEToFloat32(arrayBuffer);
-
+             let float32Data = convertPCM16LEToFloat32(arrayBuffer);
+             // Simple resample safeguard if sampleRate mismatch (assume server 24k -> context 16k) based on length heuristics
+             if (audioContext.sampleRate === 16000 && float32Data.length % 3 === 0 && mimeType.includes('pcm')) {
+                const factor = 3/2; // 24k -> 16k (approx) if length divisible by 3
+                if (float32Data.length / factor > 128) {
+                    const targetLen = Math.round(float32Data.length / factor);
+                    const down = new Float32Array(targetLen);
+                    for (let i=0; i<targetLen; i++) {
+                        const srcIndex = i * factor;
+                        const i0 = Math.floor(srcIndex);
+                        const i1 = Math.min(i0+1, float32Data.length-1);
+                        const t = srcIndex - i0;
+                        down[i] = float32Data[i0]*(1-t) + float32Data[i1]*t;
+                    }
+                    float32Data = down;
+                }
+             }
              playbackWorkletNode.port.postMessage(float32Data);
              console.log("injestAudioChuckToPlay: Sent audio data to playback processor.");
             } catch (error) {
@@ -238,9 +582,38 @@
         }
 
 
+        async function ensureConnected() {
+            if (document.getElementById('testModeCheckbox').checked) return;
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) return;
+
+            const waitForOpen = new Promise((resolve, reject) => {
+                let opened = false;
+                const timeout = setTimeout(() => {
+                    if (!opened) reject(new Error('WebSocket open timeout'));
+                }, 4000);
+                const onOpen = () => {
+                    opened = true;
+                    clearTimeout(timeout);
+                    if (webSocket) webSocket.removeEventListener('open', onOpen);
+                    resolve();
+                };
+                if (!webSocket || webSocket.readyState !== WebSocket.CONNECTING) {
+                    connect();
+                }
+                if (webSocket) webSocket.addEventListener('open', onOpen);
+            });
+            try { await waitForOpen; } catch (e) { console.warn('Could not ensure WS open before recording:', e); }
+        }
+
         async function startAudioInput() {
             try {
                 console.log("startAudioInput: Attempting to start audio input...");
+
+                // Open WebSocket first when not in test mode
+                await ensureConnected();
+                if (modalityLabel.textContent === 'TEXT') {
+                    responseTextBox.textContent = '';
+                }
                 
                 // Create and resume a single AudioContext
                 if (!audioContext) {
@@ -317,6 +690,18 @@
                     audioContext = null;
                 });
             }
+
+            // If connected, explicitly commit the turn so Gemini can respond immediately
+            if (webSocket && webSocket.readyState === WebSocket.OPEN && !document.getElementById('testModeCheckbox').checked) {
+                try {
+                    webSocket.send(JSON.stringify({
+                        realtime_input: { turn: "commit" }
+                    }));
+                    console.log("Sent explicit turn commit");
+                } catch (e) {
+                    console.warn("Failed to send turn commit:", e);
+                }
+            }
         }
 
         function displayMessage(message) {
@@ -324,13 +709,7 @@
             addParagraphToDiv("chatLog", message);
         }
 
-        function updateLightStatus(status) {
-            const brightness = status.brightness !== undefined ? status.brightness : "N/A";
-            const color = status.color !== undefined ? status.color : "N/A";
-
-            document.getElementById("brightnessStatus").textContent = brightness;
-            document.getElementById("colorStatus").textContent = color;
-        }
+    // (Removed legacy light status updater)
 
         function addParagraphToDiv(divId, text) {
            const newParagraph = document.createElement("p");
@@ -343,7 +722,7 @@
         stopButton.addEventListener('click', stopAudioInput);
 
 
-        class Response {
+    class Response {
             constructor(data) {
                this.text = null;
                this.audioData = null;
@@ -358,6 +737,8 @@
                 }
             }
          }
+
+    // Removed automatic suggestion scheduling; assistant must wait for explicit user answers.
     </script>
 </body>
 
