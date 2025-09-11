@@ -13,23 +13,21 @@ os.environ['GOOGLE_API_KEY'] = os.getenv('GEMINI_API_KEY')
 MODEL = "gemini-2.5-flash-preview-native-audio-dialog"  # use your model ID
 
 PROFILE_SYSTEM_INSTRUCTION = (
-    "You are a focused form-filling assistant whose ONLY goal is to collect four fields for a dating profile via the tool 'fill_dating_profile'. "
-    "NEVER guess or fabricate values. ALWAYS ask the user directly for each missing field in this strict order: eye_color, age, ideal_date, todays_date. "
-    "After the user explicitly provides or confirms a value, immediately call the tool with ONLY the fields you have gathered so far (and any previously confirmed ones) until all four are present. "
-    "Do not ask general questions like 'How can I help?'—immediately request the next missing field. "
-    "Validation rules:\n"
-    "eye_color: one of ['blue','brown','green','hazel'] (lowercase exact).\n"
-    "age: integer 1-120 (no decimals).\n"
-    "ideal_date: 1-2 concise sentences, no emojis.\n"
-    "todays_date: ISO 8601 (YYYY-MM-DD).\n"
-    "If user changes a previously provided field, re-call tool with corrected value. Do NOT call tool before the user answers your question. Do NOT invent or infer values."
+    "You collect exactly four profile fields: eye_color (blue|brown|green|hazel), age (1-120 integer), "
+    "ideal_date (1-2 concise sentences, no emojis), todays_date (YYYY-MM-DD). "
+    "Core rules: NEVER guess or infer any value. Proactive prompts MUST request ONLY the next missing field in this strict order: "
+    "eye_color, then age, then ideal_date, then todays_date. "
+    "If the user explicitly provides several NEW fields in one utterance (e.g. 'I'm 44 with brown eyes and I like long walks'), you MUST capture all those explicitly stated values together in a single fill_dating_profile tool call containing ONLY those newly provided fields. "
+    "Do NOT include unchanged / previously confirmed fields unless they are newly stated in the same utterance. "
+    "After the user provides a value (spoken or via a user_edit delta), call fill_dating_profile with ONLY that new field (or fields if multi-field). "
+    "If you are unsure what is currently filled, call get_profile_state instead of guessing. "
+    "If the user corrects a field, acknowledge the correction briefly and then call fill_dating_profile with ONLY the corrected field. "
+    "When all four fields are filled, explicitly ask the user to confirm ALL fields. Do NOT declare completion or stop until the user explicitly confirms. "
+    "If after completion the user changes a field, re-confirm ALL fields. "
+    "No chit-chat, no small talk, no multiple-field questions at once (unless user volunteered them), no reordering, no extra commentary beyond efficiently collecting and confirming these fields."
 )
 
-client = genai.Client(
-    http_options={
-        'api_version': 'v1alpha',
-    }
-)
+client = genai.Client()
 
 
 def fill_dating_profile(eye_color: str, age: int, ideal_date: str, todays_date: str):
@@ -40,34 +38,25 @@ def fill_dating_profile(eye_color: str, age: int, ideal_date: str, todays_date: 
         "todays_date": todays_date,
     }
 
-tool_fill_dating_profile = {
+tool_schemas = {
     "function_declarations": [
         {
             "name": "fill_dating_profile",
-            "description": "Fill or update a dating profile fields. The model should choose appropriate realistic values. If a value is already provided by prior context, it can still be resent for completeness.",
+            "description": "Record newly provided dating profile field(s). Only include fields the user just explicitly supplied or corrected.",
             "parameters": {
                 "type": "OBJECT",
                 "properties": {
-                    "eye_color": {
-                        "type": "STRING",
-                        "enum": ["blue", "brown", "green", "hazel"],
-                        "description": "Eye color; must be exactly one of: blue, brown, green, hazel."
-                    },
-                    "age": {
-                        "type": "NUMBER",
-                        "description": "Age as a positive integer (years)."
-                    },
-                    "ideal_date": {
-                        "type": "STRING",
-                        "description": "A concise description (1-2 sentences) of the person's ideal date."
-                    },
-                    "todays_date": {
-                        "type": "STRING",
-                        "description": "Today's date in ISO 8601 format (YYYY-MM-DD)."
-                    }
-                },
-                "required": ["eye_color", "age", "ideal_date", "todays_date"]
+                    "eye_color": {"type": "STRING", "enum": ["blue","brown","green","hazel"]},
+                    "age": {"type": "NUMBER"},
+                    "ideal_date": {"type": "STRING"},
+                    "todays_date": {"type": "STRING"}
+                }
             }
+        },
+        {
+            "name": "get_profile_state",
+            "description": "Retrieve current profile state and which fields are still missing.",
+            "parameters": {"type": "OBJECT", "properties": {}}
         }
     ]
 }
@@ -121,10 +110,18 @@ async def gemini_session_handler(client_websocket: websockets.ServerProtocol):
             except Exception as e:
                 print(f"Failed to build realtime_input_config: {e}")
 
-        config["tools"] = [tool_fill_dating_profile]
+        config["tools"] = [tool_schemas]
 
         # Per-session profile state (server-side mirror)
         profile_state = {"eye_color": None, "age": None, "ideal_date": None, "todays_date": None}
+        confirmed_state = {"eye_color": False, "age": False, "ideal_date": False, "todays_date": False}
+        session_confirmed = False
+
+        def missing_fields():
+            return [k for k,v in profile_state.items() if not v]
+
+        def build_state_snapshot():
+            return {"state": profile_state, "missing": missing_fields(), "confirmed": confirmed_state, "complete": all(profile_state.values())}
 
         async with client.aio.live.connect(model=(model_override or MODEL), config=config) as session:
             print("Connected to Gemini API")
@@ -132,7 +129,6 @@ async def gemini_session_handler(client_websocket: websockets.ServerProtocol):
             # Send system instruction / priming message
             try:
                 await session.send_realtime_input(text=PROFILE_SYSTEM_INSTRUCTION)
-                # Prompt for first missing field (eye_color) without guessing.
                 await session.send_realtime_input(text="Please provide your eye color (blue, brown, green, or hazel).")
             except Exception as e:
                 print(f"Failed to send system instruction: {e}")
@@ -167,13 +163,26 @@ async def gemini_session_handler(client_websocket: websockets.ServerProtocol):
                                       print(f"Error sending text to Gemini: {te}")
 
                               # Optional explicit end-of-turn commit from client
-                              if ri.get("turn") == "commit":
+                              if ri.get("audio_stream_end") is True:
                                   try:
-                                      # Indicate that the audio stream has ended so the model can respond
                                       await session.send_realtime_input(audio_stream_end=True)
-                                      print("Forwarded explicit audio_stream_end to Gemini")
+                                      print("Forwarded audio_stream_end to Gemini")
                                   except Exception as ce:
-                                      print(f"Commit error: {ce}")
+                                      print(f"audio_stream_end error: {ce}")
+                          elif "user_edit" in data:
+                              # Manual override from client; update state & notify model concisely
+                              ue = data["user_edit"]
+                              field = ue.get("field")
+                              value = ue.get("value")
+                              if field in profile_state:
+                                  profile_state[field] = value
+                                  confirmed_state[field] = True  # manual edits are considered confirmed
+                                  session_confirmed = False  # any edit after confirmation resets session level confirmation
+                                  msg = f"User explicitly set {field} = {value}. Ask only for the next missing field or confirm all if none missing." if missing_fields() else "User adjusted a field; reconfirm all fields with the user."
+                                  try:
+                                      await session.send_realtime_input(text=msg)
+                                  except Exception as te:
+                                      print(f"Error sending user_edit delta to model: {te}")
                               
                       except Exception as e:
                           print(f"Error sending to Gemini: {e}")
@@ -207,34 +216,60 @@ async def gemini_session_handler(client_websocket: websockets.ServerProtocol):
                                                 args = function_call.args
                                                 call_id = function_call.id
 
-                                                if name == "fill_dating_profile":
+                                                if name == "get_profile_state":
+                                                    snap = build_state_snapshot()
+                                                    function_responses.append({
+                                                        "name": name,
+                                                        "response": {"result": snap},
+                                                        "id": call_id
+                                                    })
+                                                    await client_websocket.send(json.dumps({"profile_state_snapshot": snap}))
+                                                elif name == "fill_dating_profile":
                                                     try:
-                                                        eye_color = str(args.get("eye_color", "")).lower()
-                                                        if eye_color not in ["blue", "brown", "green", "hazel"]:
-                                                            raise ValueError(f"Invalid eye_color '{eye_color}'")
-                                                        # age numeric validation
-                                                        age_raw = args.get("age")
-                                                        age = int(age_raw)
-                                                        if age <= 0 or age > 120:
-                                                            raise ValueError("Age out of realistic range")
-                                                        ideal_date = str(args.get("ideal_date", "")).strip()
-                                                        todays_date = str(args.get("todays_date", "")).strip()
-                                                        # Minimal ISO date sanity check
-                                                        if len(todays_date) < 8 or todays_date.count('-') != 2:
-                                                            raise ValueError("todays_date must be ISO format YYYY-MM-DD")
-                                                        result = fill_dating_profile(eye_color, age, ideal_date, todays_date)
-                                                        # Update server profile state
-                                                        profile_state.update(result)
+                                                        # Accept only fields present in args (partial updates)
+                                                        updated = {}
+                                                        # eye_color
+                                                        if "eye_color" in args:
+                                                            ec = str(args.get("eye_color", "")).lower()
+                                                            if ec in ["blue","brown","green","hazel"]:
+                                                                profile_state["eye_color"] = ec; updated["eye_color"] = ec; confirmed_state["eye_color"] = True
+                                                            else:
+                                                                raise ValueError("Invalid eye_color")
+                                                        # age
+                                                        if "age" in args:
+                                                            age_raw = args.get("age")
+                                                            age_val = int(age_raw)
+                                                            if 1 <= age_val <= 120:
+                                                                profile_state["age"] = age_val; updated["age"] = age_val; confirmed_state["age"] = True
+                                                            else:
+                                                                raise ValueError("Age out of range")
+                                                        # ideal_date
+                                                        if "ideal_date" in args:
+                                                            ideal_date_val = str(args.get("ideal_date", "")).strip()
+                                                            if ideal_date_val:
+                                                                profile_state["ideal_date"] = ideal_date_val; updated["ideal_date"] = ideal_date_val; confirmed_state["ideal_date"] = True
+                                                            else:
+                                                                raise ValueError("ideal_date empty")
+                                                        # todays_date
+                                                        if "todays_date" in args:
+                                                            td = str(args.get("todays_date", "")).strip()
+                                                            if len(td)==10 and td.count('-')==2:
+                                                                profile_state["todays_date"] = td; updated["todays_date"] = td; confirmed_state["todays_date"] = True
+                                                            else:
+                                                                raise ValueError("todays_date format")
+
                                                         function_responses.append({
                                                             "name": name,
-                                                            "response": {"result": result},
+                                                            "response": {"result": updated},
                                                             "id": call_id
                                                         })
-                                                        await client_websocket.send(json.dumps({
-                                                            "profile_tool_response": result,
-                                                            "text": json.dumps(function_responses)
-                                                        }))
-                                                        print("Dating profile function executed")
+                                                        if updated:
+                                                            await client_websocket.send(json.dumps({"profile_tool_response": updated}))
+
+                                                        # If all fields now filled prompt for user confirmation if not already confirmed session-wide
+                                                        if all(profile_state.values()) and not session_confirmed:
+                                                            await session.send_realtime_input(text="Please confirm all fields are correct. Say something like 'Yes, everything is correct' or specify changes.")
+                                                        print("Dating profile partial update executed", updated)
                                                     except Exception as e:
                                                         print(f"Error executing dating profile function: {e}")
                                                         continue
