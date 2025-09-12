@@ -225,54 +225,67 @@ async def gemini_session_handler(client_websocket: websockets.ServerProtocol):
                                                     })
                                                     await client_websocket.send(json.dumps({"profile_state_snapshot": snap}))
                                                 elif name == "fill_dating_profile":
+                                                    # Robust validation with graceful error return
+                                                    updated = {}
+                                                    errors = []
                                                     try:
-                                                        # Accept only fields present in args (partial updates)
-                                                        updated = {}
                                                         # eye_color
                                                         if "eye_color" in args:
                                                             ec = str(args.get("eye_color", "")).lower()
                                                             if ec in ["blue","brown","green","hazel"]:
                                                                 profile_state["eye_color"] = ec; updated["eye_color"] = ec; confirmed_state["eye_color"] = True
                                                             else:
-                                                                raise ValueError("Invalid eye_color")
+                                                                errors.append("eye_color must be one of blue,brown,green,hazel")
                                                         # age
                                                         if "age" in args:
-                                                            age_raw = args.get("age")
-                                                            age_val = int(age_raw)
-                                                            if 1 <= age_val <= 120:
-                                                                profile_state["age"] = age_val; updated["age"] = age_val; confirmed_state["age"] = True
-                                                            else:
-                                                                raise ValueError("Age out of range")
+                                                            try:
+                                                                age_val = int(args.get("age"))
+                                                                if 1 <= age_val <= 120:
+                                                                    profile_state["age"] = age_val; updated["age"] = age_val; confirmed_state["age"] = True
+                                                                else:
+                                                                    errors.append("age out of range 1-120")
+                                                            except Exception:
+                                                                errors.append("age not an integer")
                                                         # ideal_date
                                                         if "ideal_date" in args:
                                                             ideal_date_val = str(args.get("ideal_date", "")).strip()
                                                             if ideal_date_val:
                                                                 profile_state["ideal_date"] = ideal_date_val; updated["ideal_date"] = ideal_date_val; confirmed_state["ideal_date"] = True
                                                             else:
-                                                                raise ValueError("ideal_date empty")
+                                                                errors.append("ideal_date empty")
                                                         # todays_date
                                                         if "todays_date" in args:
                                                             td = str(args.get("todays_date", "")).strip()
                                                             if len(td)==10 and td.count('-')==2:
                                                                 profile_state["todays_date"] = td; updated["todays_date"] = td; confirmed_state["todays_date"] = True
                                                             else:
-                                                                raise ValueError("todays_date format")
+                                                                errors.append("todays_date format must be YYYY-MM-DD")
+                                                    except Exception as e:
+                                                        errors.append(f"unexpected error: {e}")
 
+                                                    if errors and not updated:
+                                                        # Return an empty result with error messages so model can correct
                                                         function_responses.append({
                                                             "name": name,
-                                                            "response": {"result": updated},
+                                                            "response": {"result": {}, "errors": errors},
+                                                            "id": call_id
+                                                        })
+                                                        await session.send_realtime_input(text="Validation error: " + "; ".join(errors) + ". Please restate only the invalid field.")
+                                                    else:
+                                                        function_responses.append({
+                                                            "name": name,
+                                                            "response": {"result": updated, "errors": errors},
                                                             "id": call_id
                                                         })
                                                         if updated:
                                                             await client_websocket.send(json.dumps({"profile_tool_response": updated}))
-
-                                                        # If all fields now filled prompt for user confirmation if not already confirmed session-wide
+                                                        if errors:
+                                                            await session.send_realtime_input(text="Partial success. Still needs fix: " + "; ".join(errors))
+                                                        # If all fields now filled prompt for user confirmation
                                                         if all(profile_state.values()) and not session_confirmed:
                                                             await session.send_realtime_input(text="Please confirm all fields are correct. Say something like 'Yes, everything is correct' or specify changes.")
-                                                        print("Dating profile partial update executed", updated)
-                                                    except Exception as e:
-                                                        print(f"Error executing dating profile function: {e}")
-                                                        continue
+                                                        print("Dating profile partial update executed", updated, "errors", errors)
+                                                    continue
 
 
                                            # Send function response back to Gemini

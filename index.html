@@ -90,6 +90,7 @@
                             <option value="gemini-2.5-flash-preview-native-audio-dialog" selected>
                                 gemini-2.5-flash-preview-native-audio-dialog
                             </option>
+                            <option value="gemini-2.0-flash-live-001">gemini-2.0-flash-live-001</option>
                         </select>
                     </div>
 
@@ -97,36 +98,35 @@
                     <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
                         <label for="voiceSelect">Voice:</label>
                         <select id="voiceSelect" class="mdl-textfield__input">
-                            <option value="Puck" selected>Puck</option>
-                            <option value="Achernar">Achernar</option>
-                            <option value="Achird">Achird</option>
-                            <option value="Algenib">Algenib</option>
-                            <option value="Algieba">Algieba</option>
-                            <option value="Alnilam">Alnilam</option>
-                            <option value="Aoede">Aoede</option>
-                            <option value="Autonoe">Autonoe</option>
-                            <option value="Callirrhoe">Callirrhoe</option>
-                            <option value="Charon">Charon</option>
-                            <option value="Despina">Despina</option>
-                            <option value="Enceladus">Enceladus</option>
-                            <option value="Erinome">Erinome</option>
-                            <option value="Fenrir">Fenrir</option>
-                            <option value="Gacrux">Gacrux</option>
-                            <option value="Iapetus">Iapetus</option>
-                            <option value="Kore">Kore</option>
-                            <option value="Laomedeia">Laomedeia</option>
-                            <option value="Leda">Leda</option>
-                            <option value="Orus">Orus</option>
-                            <option value="Pulcherrima">Pulcherrima</option>
-                            <option value="Rasalgethi">Rasalgethi</option>
-                            <option value="Sadachbia">Sadachbia</option>
-                            <option value="Sadaltager">Sadaltager</option>
-                            <option value="Schedar">Schedar</option>
-                            <option value="Sulafat">Sulafat</option>
-                            <option value="Umbriel">Umbriel</option>
-                            <option value="Vindemiatrix">Vindemiatrix</option>
-                            <option value="Zephyr">Zephyr</option>
-                            <option value="Zubenelgenubi">Zubenelgenubi</option>
+                            <option value="Puck" selected>Puck — Conversational, friendly</option>
+                            <option value="Charon">Charon — Deep, authoritative</option>
+                            <option value="Kore">Kore — Neutral, professional</option>
+                            <option value="Fenrir">Fenrir — Warm, approachable</option>
+                            <option value="Leda">Leda — Youthful</option>
+                            <option value="Orus">Orus — Firm</option>
+                            <option value="Aoede">Aoede — Breezy</option>
+                            <option value="Callirrhoe">Callirrhoe — Easy-going</option>
+                            <option value="Enceladus">Enceladus — Breathy</option>
+                            <option value="Iapetus">Iapetus — Clear</option>
+                            <option value="Umbriel">Umbriel — Easy-going</option>
+                            <option value="Algieba">Algieba — Smooth</option>
+                            <option value="Despina">Despina — Smooth</option>
+                            <option value="Erinome">Erinome — Clear</option>
+                            <option value="Algenib">Algenib — Gravelly</option>
+                            <option value="Rasalgethi">Rasalgethi — Informative</option>
+                            <option value="Laomedeia">Laomedeia — Upbeat</option>
+                            <option value="Achernar">Achernar — Soft</option>
+                            <option value="Alnilam">Alnilam — Firm</option>
+                            <option value="Schedar">Schedar — Even</option>
+                            <option value="Gacrux">Gacrux — Mature</option>
+                            <option value="Pulcherrima">Pulcherrima — Forward</option>
+                            <option value="Achird">Achird — Friendly</option>
+                            <option value="Zubenelgenubi">Zubenelgenubi — Casual</option>
+                            <option value="Vindemiatrix">Vindemiatrix — Gentle</option>
+                            <option value="Sadachbia">Sadachbia — Lively</option>
+                            <option value="Sadaltager">Sadaltager — Knowledgeable</option>
+                            <option value="Sulafat">Sulafat — Warm</option>
+                            <option value="Zephyr">Zephyr — Bright</option>
                         </select>
                     </div>
 
@@ -188,8 +188,6 @@
                             </div>
                         </div>
                         <div class="profile-actions">
-                            <button class="pill-btn" id="btnSuggestMissing">Suggest Missing</button>
-                            <button class="pill-btn alt" id="btnSubmitHints">Use My Inputs</button>
                             <button class="pill-btn danger" id="btnResetProfile" title="Clear local profile state">Reset</button>
                         </div>
                         <div class="profile-status" id="profileStatus"></div>
@@ -232,33 +230,36 @@
         const ageInput = document.getElementById('ageInput');
         const idealDateInput = document.getElementById('idealDateInput');
         const todayDateInput = document.getElementById('todayDateInput');
-        const btnSuggestMissing = document.getElementById('btnSuggestMissing');
-        const btnSubmitHints = document.getElementById('btnSubmitHints');
         const btnResetProfile = document.getElementById('btnResetProfile');
         const profileStatus = document.getElementById('profileStatus');
         const profileBadges = document.getElementById('profileBadges');
 
         // Local profile state mirror
-        const profileState = { eye_color: null, age: null, ideal_date: null, todays_date: null };
+    const profileState = { eye_color: null, age: null, ideal_date: null, todays_date: null };
+    const confirmedState = { eye_color: false, age: false, ideal_date: false, todays_date: false };
+    const manualOverrideTimestamp = { eye_color:0, age:0, ideal_date:0, todays_date:0 };
+    const lastToolApplyTimestamp   = { eye_color:0, age:0, ideal_date:0, todays_date:0 };
     let completionPromptShown = false;
     let sessionCompleted = false;
 
     function updateProfileUI() {
-            // Always overwrite inputs with latest tool-confirmed state (explicit user-provided values only)
+            // Always overwrite visible inputs with latest state (manual overrides already applied)
             if (profileState.eye_color !== null) eyeColorInput.value = profileState.eye_color;
             if (profileState.age !== null) ageInput.value = profileState.age;
             if (profileState.ideal_date !== null) idealDateInput.value = profileState.ideal_date;
             if (profileState.todays_date !== null) todayDateInput.value = profileState.todays_date;
 
-            const missing = Object.entries(profileState).filter(([k,v]) => !v);
-            const filled = Object.entries(profileState).filter(([k,v]) => v);
+            const missing = Object.entries(profileState).filter(([_,v]) => !v);
+            const allFilled = missing.length === 0;
 
-            // Field badge display
+            // Field badge display with confirmation status
             profileBadges.innerHTML = '';
-            filled.forEach(([k,v]) => {
+            ['eye_color','age','ideal_date','todays_date'].forEach(k => {
+                const v = profileState[k];
+                if (!v) return;
                 const badge = document.createElement('span');
                 badge.className = 'inline-badge fade-in';
-                badge.textContent = k + ': ' + (''+v).slice(0,40);
+                badge.textContent = k + ': ' + (''+v).slice(0,40) + (confirmedState[k] ? ' ✓' : ' (unconfirmed)');
                 profileBadges.appendChild(badge);
             });
 
@@ -269,10 +270,17 @@
                 if (!profileState[f]) el.classList.add('missing'); else el.classList.remove('missing');
             });
 
-            profileStatus.textContent = missing.length ? `${missing.length} field(s) still missing.` : 'All profile fields filled.';
+            const unconfirmed = Object.entries(confirmedState).filter(([k,v]) => profileState[k] && !v).map(([k])=>k);
+            if (!allFilled) {
+                profileStatus.textContent = `${missing.length} field(s) still missing.`;
+            } else if (unconfirmed.length) {
+                profileStatus.textContent = 'All fields filled. Awaiting confirmation for: ' + unconfirmed.join(', ');
+            } else {
+                profileStatus.textContent = 'All fields filled & confirmed.';
+            }
 
-            // Trigger completion prompt once
-            if (!missing.length && !completionPromptShown && !sessionCompleted) {
+            // Trigger completion prompt only when all filled AND all confirmed
+            if (allFilled && unconfirmed.length === 0 && !completionPromptShown && !sessionCompleted) {
                 showCompletionPrompt();
             }
         }
@@ -281,32 +289,42 @@
             eyeColorInput.value=''; ageInput.value=''; idealDateInput.value=''; todayDateInput.value='';
             updateProfileUI();
         }
-    function buildMissingFieldsPrompt() {
-            const missing = Object.entries(profileState).filter(([_,v]) => !v).map(([k])=>k);
-            if (!missing.length) return 'All fields already filled; refine ideal_date slightly keeping style concise.';
-            return 'Please fill ONLY these missing profile fields now: '+ missing.join(', ') + '. Respond by calling the tool.';
-        }
-    function buildUserHintPrompt() {
-            // Validate and compile user-provided hints
-            const hints = {};
-            const eye = eyeColorInput.value.trim().toLowerCase();
-            if (eye && ['blue','brown','green','hazel'].includes(eye)) hints.eye_color = eye;
-            const ageVal = ageInput.value.trim();
-            if (ageVal) {
-                const n = parseInt(ageVal,10); if (!isNaN(n) && n>0 && n<=120) hints.age = n; else alert('Age must be 1-120');
-            }
-            const ideal = idealDateInput.value.trim(); if (ideal) hints.ideal_date = ideal;
-            const td = todayDateInput.value.trim(); if (td) hints.todays_date = td;
-            if (!Object.keys(hints).length) return 'No new user hints; proceed to fill any missing fields.';
-            return 'Use these user-provided values (validate & adjust only if invalid) then call tool: '+ JSON.stringify(hints);
-        }
+    // Removed buildMissingFieldsPrompt & buildUserHintPrompt (no longer used)
     function sendTextPrompt(text) {
             if (!webSocket || webSocket.readyState !== WebSocket.OPEN) { console.warn('WS not open'); return; }
             webSocket.send(JSON.stringify({ realtime_input: { text } }));
         }
-    btnSuggestMissing.addEventListener('click', ()=> { sendTextPrompt(buildMissingFieldsPrompt()); });
-        btnSubmitHints.addEventListener('click', ()=> { sendTextPrompt(buildUserHintPrompt()); });
-        btnResetProfile.addEventListener('click', ()=> { resetProfileState(); });
+        btnResetProfile.addEventListener('click', ()=> { resetProfileState(); updateProfileUI(); });
+        function sendUserEdit(field, value) {
+            if (!webSocket || webSocket.readyState !== WebSocket.OPEN || document.getElementById('testModeCheckbox').checked) return;
+            webSocket.send(JSON.stringify({ user_edit: { field, value } }));
+            console.log('Sent user_edit', field, value);
+        }
+        function markConfirmed(field) { confirmedState[field] = true; }
+        // Manual overrides: update state, mark confirmed, timestamp, send delta
+        eyeColorInput.addEventListener('change', () => {
+            const v = (eyeColorInput.value||'').toLowerCase();
+            if (!v) { profileState.eye_color = null; confirmedState.eye_color=false; updateProfileUI(); return; }
+            if (!['blue','brown','green','hazel'].includes(v)) { alert('Invalid eye color'); eyeColorInput.value=''; return; }
+            profileState.eye_color = v; confirmedState.eye_color=true; manualOverrideTimestamp.eye_color=Date.now(); sendUserEdit('eye_color', v); updateProfileUI();
+        });
+        ageInput.addEventListener('change', () => {
+            const raw = ageInput.value.trim();
+            if (!raw) { profileState.age=null; confirmedState.age=false; updateProfileUI(); return; }
+            const n = parseInt(raw,10); if (isNaN(n) || n<1 || n>120) { alert('Age must be 1-120'); ageInput.value=''; return; }
+            profileState.age = n; confirmedState.age=true; manualOverrideTimestamp.age=Date.now(); sendUserEdit('age', n); updateProfileUI();
+        });
+        idealDateInput.addEventListener('change', () => {
+            const txt = idealDateInput.value.trim();
+            if (!txt) { profileState.ideal_date=null; confirmedState.ideal_date=false; updateProfileUI(); return; }
+            profileState.ideal_date = txt; confirmedState.ideal_date=true; manualOverrideTimestamp.ideal_date=Date.now(); sendUserEdit('ideal_date', txt); updateProfileUI();
+        });
+        todayDateInput.addEventListener('change', () => {
+            const td = todayDateInput.value.trim();
+            if (!td) { profileState.todays_date=null; confirmedState.todays_date=false; updateProfileUI(); return; }
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(td)) { alert('Date must be YYYY-MM-DD'); return; }
+            profileState.todays_date = td; confirmedState.todays_date=true; manualOverrideTimestamp.todays_date=Date.now(); sendUserEdit('todays_date', td); updateProfileUI();
+        });
     // Start with ALL fields blank; do not prefill today's date (user must state it explicitly)
     updateProfileUI();
 
@@ -486,32 +504,21 @@
             // Tool response for profile
             if (messageData.profile_tool_response) {
                 try {
-                    const r = messageData.profile_tool_response;
-                    ['eye_color','age','ideal_date','todays_date'].forEach(k=>{ if (r[k]!==undefined && r[k]!==null) profileState[k]=r[k]; });
+                    const r = messageData.profile_tool_response; const now=Date.now();
+                    ['eye_color','age','ideal_date','todays_date'].forEach(k=>{ 
+                        if (r[k]!==undefined && r[k]!==null) {
+                            // Only overwrite if user didn't override after last tool update
+                            if (!manualOverrideTimestamp[k] || manualOverrideTimestamp[k] <= lastToolApplyTimestamp[k]) {
+                                profileState[k]=r[k]; confirmedState[k]=true; lastToolApplyTimestamp[k]=now;
+                            }
+                        }
+                    });
                     updateProfileUI();
                 } catch(err){ console.warn('Error applying profile tool response', err); }
             }
 
             if (response.text) {
-                try {
-                    // Check if the text is a JSON string for tool calls
-                    const toolCallData = JSON.parse(response.text);
-                    if (Array.isArray(toolCallData) && toolCallData.length > 0) {
-                        const toolCall = toolCallData[0];
-                        if (toolCall.name === 'set_light_values' && toolCall.response && toolCall.response.result) {
-                            const { brightness, colorTemperature } = toolCall.response.result;
-                            document.getElementById('brightnessStatus').textContent = brightness;
-                            document.getElementById('colorStatus').textContent = colorTemperature;
-                        }
-                    }
-                } catch (e) {
-                    // Not a JSON string, so it's a regular text message
-                    if (modalityLabel.textContent === 'TEXT') {
-                        appendToResponseBox(response.text);
-                    } else {
-                        displayMessage("GEMINI: " + response.text);
-                    }
-                }
+                if (modalityLabel.textContent === 'TEXT') appendToResponseBox(response.text); else displayMessage('GEMINI: ' + response.text);
             }
             if (response.audioData) {
                 injestAudioChuckToPlay(response.audioData, messageData.audio_mime_type || 'audio/pcm');
@@ -691,16 +698,9 @@
                 });
             }
 
-            // If connected, explicitly commit the turn so Gemini can respond immediately
+            // Signal end of audio stream turn (allows model to respond sooner)
             if (webSocket && webSocket.readyState === WebSocket.OPEN && !document.getElementById('testModeCheckbox').checked) {
-                try {
-                    webSocket.send(JSON.stringify({
-                        realtime_input: { turn: "commit" }
-                    }));
-                    console.log("Sent explicit turn commit");
-                } catch (e) {
-                    console.warn("Failed to send turn commit:", e);
-                }
+                try { webSocket.send(JSON.stringify({ realtime_input: { audio_stream_end: true } })); console.log('Sent audio_stream_end'); } catch(e){ console.warn('Failed to send audio_stream_end', e); }
             }
         }
 
