@@ -77,20 +77,39 @@
         <header class="mdl-layout__header">
             <div class="mdl-layout__header-row">
                 <!-- Title -->
-                <span class="mdl-layout-title">Gemini Live Demo</span>
+                <span class="mdl-layout-title">Voice Form Fill - Multi Mode (Dating / PDF)</span>
             </div>
         </header>
         <main class="mdl-layout__content">
             <div class="page-content">
                 <div class="demo-content">
+                    <!-- Mode Selection Gate -->
+                    <div id="modeGate" style="display:flex; gap:16px; margin:12px 0 24px 0; flex-wrap:wrap;">
+                        <button id="btnModeDating" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored">Use Default Dating Profile Form</button>
+                        <button id="btnModePdf" class="mdl-button mdl-js-button mdl-button--raised">Upload AcroForm PDF</button>
+                        <span id="modeStatus" style="align-self:center; font-size:12px; color:#555;">Mode not chosen.</span>
+                    </div>
+
+                    <!-- PDF Upload Panel (hidden until PDF mode selected) -->
+                    <div id="pdfUploadPanel" style="display:none; width:100%; max-width:780px; border:1px solid #ccc; padding:14px; border-radius:8px; background:#fafafa;">
+                        <strong>Upload AcroForm PDF</strong>
+                        <form id="pdfUploadForm" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <input type="file" id="pdfFileInput" accept="application/pdf" aria-label="PDF file" />
+                            <button type="submit" class="mdl-button mdl-js-button mdl-button--raised">Upload & Parse</button>
+                            <button type="button" id="btnCancelPdfMode" class="mdl-button mdl-js-button">Cancel</button>
+                        </form>
+                        <div id="pdfUploadStatus" style="margin-top:8px; font-size:12px; color:#444;"></div>
+                        <div id="pdfWarnings" style="margin-top:4px; font-size:11px; color:#b05000;"></div>
+                    </div>
+
                     <!-- Model Selector -->
                     <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
                         <label for="modelSelect">Model:</label>
                         <select id="modelSelect" class="mdl-textfield__input">
-                            <option value="gemini-2.5-flash-preview-native-audio-dialog" selected>
+                            <option value="gemini-2.5-flash-preview-native-audio-dialog">
                                 gemini-2.5-flash-preview-native-audio-dialog
                             </option>
-                            <option value="gemini-2.0-flash-live-001">gemini-2.0-flash-live-001</option>
+                            <option value="gemini-2.0-flash-live-001" selected>gemini-2.0-flash-live-001</option>
                         </select>
                     </div>
 
@@ -195,6 +214,19 @@
                         <div id="profileBadges"></div>
                     </div>
 
+                    <!-- Generic PDF Form Collector (hidden until PDF mode active + schema loaded) -->
+                    <div class="profile-card" id="pdfFormCard" style="display:none;">
+                        <div style="font-weight:700; font-size:18px; margin-bottom:4px;">PDF Form Field Collector</div>
+                        <div class="small-note" id="pdfFormMetaNote">Upload a PDF with AcroForm fields (first page only). All fields required.</div>
+                        <div id="pdfFieldSummary" class="profile-status" style="margin-top:4px;"></div>
+                        <div id="pdfFieldsContainer" class="profile-grid" style="margin-top:10px;"></div>
+                        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+                            <button class="pill-btn danger" id="btnResetPdf" title="Reset PDF session">Reset</button>
+                            <button class="pill-btn" id="btnDownloadPdf" style="display:none;">Download Filled PDF</button>
+                        </div>
+                        <div id="pdfCompletionBanner" class="profile-status" style="margin-top:10px;"></div>
+                    </div>
+
                     <!-- Text Output -->
                     <div style="width: 100%; max-width: 780px;">
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
@@ -214,9 +246,26 @@
 
     <script defer>
         const URL = "ws://localhost:9082";
-        const startButton = document.getElementById('startButton');
-        const stopButton = document.getElementById('stopButton');
-        let webSocket = null;
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
+    // Mode controls
+    const btnModeDating = document.getElementById('btnModeDating');
+    const btnModePdf = document.getElementById('btnModePdf');
+    const modeStatus = document.getElementById('modeStatus');
+    const pdfUploadPanel = document.getElementById('pdfUploadPanel');
+    const pdfUploadForm = document.getElementById('pdfUploadForm');
+    const pdfFileInput = document.getElementById('pdfFileInput');
+    const pdfUploadStatus = document.getElementById('pdfUploadStatus');
+    const pdfWarnings = document.getElementById('pdfWarnings');
+    const btnCancelPdfMode = document.getElementById('btnCancelPdfMode');
+    const pdfFormCard = document.getElementById('pdfFormCard');
+    const pdfFieldsContainer = document.getElementById('pdfFieldsContainer');
+    const pdfFieldSummary = document.getElementById('pdfFieldSummary');
+    const pdfFormMetaNote = document.getElementById('pdfFormMetaNote');
+    const btnResetPdf = document.getElementById('btnResetPdf');
+    const btnDownloadPdf = document.getElementById('btnDownloadPdf');
+    const pdfCompletionBanner = document.getElementById('pdfCompletionBanner');
+    let webSocket = null;
         let audioContext = null;
         let playbackWorkletNode = null;
         let recordingWorkletNode = null;
@@ -241,6 +290,15 @@
     const lastToolApplyTimestamp   = { eye_color:0, age:0, ideal_date:0, todays_date:0 };
     let completionPromptShown = false;
     let sessionCompleted = false;
+    // Mode + PDF session state
+    let currentMode = null; // 'dating' | 'pdf'
+    let pdfSchema = null;
+    let pdfFormId = null;
+    let pdfState = {}; // fieldName -> value
+    let pdfConfirmed = {}; // fieldName -> bool
+    let pdfAllConfirmed = false;
+    let pdfDownloadReady = false;
+    let pdfFieldsOrder = [];
 
     function updateProfileUI() {
             // Always overwrite visible inputs with latest state (manual overrides already applied)
@@ -453,13 +511,20 @@
 
             const setup_client_message = {
                 setup: {
-                    // Server flattens generation_config
                     generation_config: { response_modalities: responseModalities, temperature: 0.9 },
                     model: model,
                     voice_name: voiceName,
-                    enable_vad: enableVad
+                    enable_vad: enableVad,
+                    mode: currentMode === 'pdf' ? 'pdf_form' : 'dating'
                 }
             };
+
+            // For PDF mode, include field names in setup so tools can be predeclared
+            if (currentMode === 'pdf' && pdfSchema && pdfFieldsOrder.length > 0) {
+                setup_client_message.setup.pdf_field_names = pdfFieldsOrder;
+                setup_client_message.setup.pdf_form_id = pdfFormId;
+            }
+
             webSocket.send(JSON.stringify(setup_client_message));
         }
 
@@ -515,6 +580,36 @@
                     });
                     updateProfileUI();
                 } catch(err){ console.warn('Error applying profile tool response', err); }
+            }
+            // PDF completion notification
+            if (messageData.form_complete) {
+                showPdfConfirmationPrompt();
+            }
+            if (messageData.download_ready) {
+                pdfDownloadReady = true;
+                pdfCompletionBanner.textContent = 'Download ready. You may now download the filled PDF.';
+                btnDownloadPdf.style.display='inline-block';
+            }
+            if (messageData.error && messageData.error === 'unknown_form') {
+                showInactivityBanner();
+            }
+
+            // PDF form tool responses
+            if (messageData.form_tool_response) {
+                const { updated, remaining } = messageData.form_tool_response;
+                Object.entries(updated || {}).forEach(([k,v]) => {
+                    pdfState[k] = v; pdfConfirmed[k] = true;
+                });
+                refreshPdfFieldsUI();
+            }
+            if (messageData.form_state) {
+                // Could update summary if needed
+                refreshPdfFieldsUI();
+            }
+            if (messageData.download_ready) {
+                pdfDownloadReady = true;
+                pdfCompletionBanner.textContent = 'Download ready.';
+                btnDownloadPdf.style.display='inline-block';
             }
 
             if (response.text) {
@@ -718,8 +813,211 @@
            div.appendChild(newParagraph);
         }
 
-        startButton.addEventListener('click', startAudioInput);
+        startButton.addEventListener('click', () => { if(!currentMode){alert('Select a mode first.'); return;} startAudioInput(); });
         stopButton.addEventListener('click', stopAudioInput);
+
+        // ------- Mode Handling -------
+        function setMode(newMode){
+            if (currentMode === newMode) return;
+            currentMode = newMode;
+            modeStatus.textContent = 'Mode: ' + (newMode==='dating' ? 'Dating Profile' : 'PDF Form');
+            if (newMode === 'dating') {
+                pdfUploadPanel.style.display='none';
+                pdfFormCard.style.display='none';
+                profileCard.style.display='block';
+                if (!document.getElementById('testModeCheckbox').checked) connect();
+            } else if (newMode === 'pdf') {
+                profileCard.style.display='none';
+                pdfUploadPanel.style.display='block';
+                pdfFormCard.style.display='none';
+            }
+        }
+        btnModeDating.addEventListener('click', ()=> setMode('dating'));
+        btnModePdf.addEventListener('click', ()=> setMode('pdf'));
+        btnCancelPdfMode.addEventListener('click', ()=> { setMode(null); modeStatus.textContent='Mode not chosen.'; });
+
+        // ------- PDF Upload Flow -------
+        pdfUploadForm.addEventListener('submit', async (e)=>{
+            e.preventDefault();
+            const file = pdfFileInput.files && pdfFileInput.files[0];
+            pdfWarnings.textContent=''; pdfUploadStatus.textContent='';
+            if(!file){ pdfUploadStatus.textContent='Select a PDF file.'; return; }
+            if(file.size > 5*1024*1024){ pdfUploadStatus.textContent='File too large (>5MB).'; return; }
+            pdfUploadStatus.textContent='Uploading...';
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const resp = await fetch('/upload_form', { method:'POST', body: formData });
+                const data = await resp.json();
+                if(!data.ok){ pdfUploadStatus.textContent='Error: '+ (data.message||data.error||'upload failed'); return; }
+                let statusLine = 'Parsed '+data.schema.field_count+' field(s).';
+                if(data.replaced_previous){ statusLine += ' (Previous form replaced.)'; }
+                pdfUploadStatus.textContent = statusLine;
+                if(data.warnings){ pdfWarnings.textContent = 'Warnings: '+ data.warnings.join(', '); }
+                pdfSchema = data.schema; pdfFormId = data.schema.form_id;
+                pdfFieldsOrder = data.schema.fields.map(f=>f.name);
+                pdfState = {}; pdfConfirmed = {}; pdfFieldsOrder.forEach(n=>{ pdfState[n]=null; pdfConfirmed[n]=false; });
+                // Extra metadata warnings
+                const meta = pdfSchema.metadata || {};
+                const extraNotes = [];
+                if(meta.truncated_to_first_page){ extraNotes.push('Only first page processed.'); }
+                if(meta.field_cap_reached){ extraNotes.push('Field cap reached; some fields ignored.'); }
+                if(extraNotes.length){ pdfWarnings.textContent += (pdfWarnings.textContent? ' ':'') + extraNotes.join(' '); }
+                pdfUploadPanel.style.display='none';
+                pdfFormCard.style.display='block';
+                refreshPdfFieldsUI();
+                // Now connect websocket in PDF mode with schema available for tool predeclaration
+                if(!document.getElementById('testModeCheckbox').checked) connect(); else modeStatus.textContent+=' (Test Mode)';
+                // No need to send pdf_schema message anymore - schema is in setup message
+            } catch(err){
+                console.error(err); pdfUploadStatus.textContent='Upload failed.';
+            }
+        });
+
+        // Remove the sendPdfSchemaIfReady function since schema is now sent in setup
+
+        btnResetPdf.addEventListener('click', async ()=>{
+            if(!pdfFormId){ return; }
+            await fetch('/reset_form', { method:'POST' });
+            pdfSchema=null; pdfFormId=null; pdfState={}; pdfConfirmed={}; pdfFieldsOrder=[]; pdfDownloadReady=false; pdfCompletionBanner.textContent='';
+            pdfFormCard.style.display='none';
+            pdfUploadPanel.style.display='block';
+            modeStatus.textContent='PDF mode: form reset.';
+        });
+
+        btnDownloadPdf.addEventListener('click', async ()=>{
+            if(!pdfDownloadReady && pdfFormId){ /* Still allow attempt once complete locally */ }
+            if(!pdfFormId){ return; }
+            const resp = await fetch('/download_filled/'+pdfFormId);
+            if(!resp.ok){ alert('Download failed (not ready?)'); return; }
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'filled_'+ (pdfSchema?.metadata?.original_filename || 'form') ;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(()=>URL.revokeObjectURL(url), 3000);
+        });
+
+        function refreshPdfFieldsUI(){
+            if(!pdfSchema){ return; }
+            pdfFieldsContainer.innerHTML='';
+            let missingCount=0; let total=pdfFieldsOrder.length;
+            pdfFieldsOrder.forEach(name => {
+                const fieldMeta = pdfSchema.fields.find(f=>f.name===name) || { display_name: name };
+                const val = pdfState[name];
+                if(!val) missingCount++;
+                const wrap = document.createElement('div');
+                wrap.className = 'field-block'+(val?'' : ' missing');
+                const inputId = 'pdf_field_'+name;
+                wrap.innerHTML = `<label for="${inputId}">${fieldMeta.display_name}</label><input aria-label="${fieldMeta.display_name}" id="${inputId}" type="text" value="${val?escapeHtml(val):''}" />`;
+                const input = wrap.querySelector('input');
+                input.addEventListener('change', ()=>{
+                    const newVal = input.value.trim();
+                    if(!newVal){ pdfState[name]=null; pdfConfirmed[name]=false; refreshPdfFieldsUI(); return; }
+                    if(newVal.length > 500){
+                        alert('Value truncated to 500 characters.');
+                    }
+                    // send user_edit directly to websocket if live, else queue local
+                    pdfState[name]=newVal.slice(0,500); pdfConfirmed[name]=true;
+                    if(webSocket && webSocket.readyState===WebSocket.OPEN){
+                        webSocket.send(JSON.stringify({ user_edit: { field: name, value: newVal }}));
+                    }
+                    refreshPdfFieldsUI();
+                });
+                pdfFieldsContainer.appendChild(wrap);
+            });
+            pdfFieldSummary.textContent = `${total-missingCount} of ${total} fields filled.`;
+            // Hide any previous confirmation prompt if fields became missing again
+            if (missingCount > 0) removePdfConfirmationPrompt();
+        }
+
+        function showPdfConfirmationPrompt(){
+            if(document.getElementById('pdfConfirmPrompt')) return;
+            const div = document.createElement('div');
+            div.id = 'pdfConfirmPrompt';
+            div.style.marginTop='14px';
+            div.style.padding='10px 12px';
+            div.style.background='#fff5f1';
+            div.style.border='1px solid #f5a076';
+            div.style.borderRadius='8px';
+            div.style.fontSize='13px';
+            div.innerHTML = `<strong>All fields captured.</strong> Please confirm all values are correct.
+                <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="pill-btn" id="btnConfirmPdf">Confirm & Generate</button>
+                    <button class="pill-btn alt" id="btnReviewPdf">Review Fields</button>
+                </div>`;
+            pdfFormCard.appendChild(div);
+            div.querySelector('#btnConfirmPdf').addEventListener('click', ()=>{
+                // Send confirm_form message
+                if(webSocket && webSocket.readyState===WebSocket.OPEN){
+                    webSocket.send(JSON.stringify({ confirm_form: true }));
+                }
+                pdfCompletionBanner.textContent='Confirmation sent. Preparing file...';
+            });
+            div.querySelector('#btnReviewPdf').addEventListener('click', ()=>{ div.remove(); });
+        }
+        function removePdfConfirmationPrompt(){
+            const d = document.getElementById('pdfConfirmPrompt'); if(d) d.remove();
+        }
+
+        // ------- Inactivity Handling -------
+        let pdfStatusPollTimer = null;
+        function startPdfStatusPolling(){
+            stopPdfStatusPolling();
+            if(!pdfFormId) return;
+            pdfStatusPollTimer = setInterval(async ()=>{
+                try {
+                    const resp = await fetch('/form_status/'+pdfFormId);
+                    if(resp.status === 404){ showInactivityBanner(); stopPdfStatusPolling(); return; }
+                    if(!resp.ok) return;
+                    const data = await resp.json();
+                    if(!data.ok){ if(data.error==='unknown_form'){ showInactivityBanner(); stopPdfStatusPolling(); } return; }
+                } catch(e){ /* network error ignored */ }
+            }, 30000); // every 30s
+        }
+        function stopPdfStatusPolling(){ if(pdfStatusPollTimer){ clearInterval(pdfStatusPollTimer); pdfStatusPollTimer=null; } }
+        function showInactivityBanner(){
+            if(!pdfFormCard) return;
+            let b = document.getElementById('pdfInactiveBanner');
+            if(!b){
+                b = document.createElement('div');
+                b.id='pdfInactiveBanner';
+                b.style.marginTop='12px';
+                b.style.padding='10px 12px';
+                b.style.background='#ffe8e6';
+                b.style.border='1px solid #ff9b92';
+                b.style.borderRadius='8px';
+                b.style.fontSize='12px';
+                b.style.color='#7a1e1a';
+                b.textContent = 'Session expired due to inactivity. Please reset or upload a new PDF.';
+                pdfFormCard.appendChild(b);
+            }
+        }
+
+        // Hook status poll start when PDF schema loads
+        const originalRefreshPdf = refreshPdfFieldsUI;
+        // Already calling refreshPdfFieldsUI in flow; ensure polling begins after schema is set
+        function refreshPdfFieldsUIWrapper(){ originalRefreshPdf(); if(currentMode==='pdf' && pdfFormId){ startPdfStatusPolling(); } }
+        refreshPdfFieldsUI = refreshPdfFieldsUIWrapper;
+
+        function escapeHtml(str){
+            return str.replace(/[&<>"']/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+        }
+
+        // Hook into websocket open to send pdf schema
+        const originalConnect = connect;
+        connect = function(){
+            if (document.getElementById('testModeCheckbox').checked) {
+                console.log('Test mode skipping WS connect');
+                return;
+            }
+            console.log('connecting: ', URL);
+            webSocket = new WebSocket(URL);
+            webSocket.onclose = (event)=>{ console.log('websocket closed: ', event); };
+            webSocket.onerror = (event)=>{ console.log('websocket error: ', event); };
+            webSocket.onopen = (event)=>{ console.log('websocket open: ', event); sendInitialSetupMessage(); };
+            webSocket.onmessage = receiveMessage;
+        }
 
 
     class Response {

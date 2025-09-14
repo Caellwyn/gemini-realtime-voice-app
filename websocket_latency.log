@@ -1,0 +1,20 @@
+2025-09-13 18:05:25,308 - INFO - New WebSocket connection from ::1:63766
+2025-09-13 18:05:25,323 - INFO - Attempting Gemini API connection (client: ::1:63766)
+2025-09-13 18:05:25,980 - INFO - Gemini API connected in 0.65s (client: ::1:63766)
+2025-09-13 18:06:35,810 - WARNING - Connection closed unexpectedly: sent 1011 (internal error) keepalive ping timeout; no close frame received (client: ::1:63766)
+2025-09-13 18:06:43,334 - INFO - Gemini session ended (client: ::1:63766)
+2025-09-13 18:06:44,068 - INFO - New WebSocket connection from ::1:50060
+2025-09-13 18:06:44,085 - INFO - Attempting Gemini API connection (client: ::1:50060)
+2025-09-13 18:06:46,851 - INFO - Gemini API connected in 2.76s (client: ::1:50060)
+2025-09-13 18:06:56,098 - INFO - New WebSocket connection from ::1:63602
+2025-09-13 18:06:56,103 - INFO - Attempting Gemini API connection (client: ::1:63602)
+2025-09-13 18:06:59,622 - INFO - Gemini API connected in 3.52s (client: ::1:63602)
+2025-09-13 18:16:27,885 - WARNING - Connection closed unexpectedly: no close frame received or sent (client: ::1:50060)
+2025-09-13 18:16:27,885 - WARNING - Connection closed unexpectedly: no close frame received or sent (client: ::1:63602)
+2025-09-13 18:16:27,886 - INFO - Gemini session ended (client: ::1:50060)
+2025-09-13 18:16:27,886 - INFO - Gemini session ended (client: ::1:63602)
+2025-09-13 18:35:33,985 - INFO - New WebSocket connection from ::1:61494
+2025-09-13 18:35:33,999 - INFO - Attempting Gemini API connection (client: ::1:61494)
+2025-09-13 18:35:34,506 - INFO - Gemini API connected in 0.51s (client: ::1:61494)
+2025-09-13 18:37:17,808 - INFO - Client connection closed normally (client: ::1:61494)
+2025-09-13 18:37:17,809 - INFO - Gemini session ended (client: ::1:61494)
