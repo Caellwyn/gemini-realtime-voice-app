@@ -11,6 +11,23 @@ except ImportError:  # pragma: no cover
 
 MAX_FIELDS = 300  # safety cap
 
+# Explicit internal / non-user-visible field names observed in sample PDFs that should not
+# be presented to the user for data entry. These commonly represent hidden workflow or
+# submission controls (e.g. Adobe auto form IDs, spacer fields, submission triggers).
+INTERNAL_FIELD_EXACT_LOWER = {
+    # Use all lowercase for case-insensitive matching
+    "formid", "pdf_submission_new", "simple_spc", "adobewarning",
+    # Common non-user interactive button names sometimes exposed as widgets
+    "submit", "print", "clear", "reset"
+}
+
+# Substring / pattern heuristics (case-insensitive) – kept intentionally conservative to
+# avoid stripping legitimate fields. Extend cautiously.
+INTERNAL_FIELD_CONTAINS = [
+    "adobewarning",  # redundancy / safety
+    "_spc",          # spacer artifacts
+]
+
 class AcroFormError(Exception):
     pass
 
@@ -52,6 +69,7 @@ def extract_acroform(pdf_bytes: bytes, original_filename: str) -> FormSchema:
 
     annots = first_page.get("/Annots") or []
     limit = 0
+    filtered_internal: List[str] = []
     for ref in annots:
         if limit >= MAX_FIELDS:
             break
@@ -61,6 +79,11 @@ def extract_acroform(pdf_bytes: bytes, original_filename: str) -> FormSchema:
                 continue
             field_name = annot.get("/T")
             if not field_name:
+                continue
+            # Filter internal / non-user-visible fields
+            lower = field_name.lower()
+            if lower in INTERNAL_FIELD_EXACT_LOWER or any(p in lower for p in INTERNAL_FIELD_CONTAINS):
+                filtered_internal.append(field_name)
                 continue
             original_name = field_name
             base = field_name
@@ -98,6 +121,10 @@ def extract_acroform(pdf_bytes: bytes, original_filename: str) -> FormSchema:
             try:
                 field_name = f.get("/T")
                 if not field_name:
+                    continue
+                lower = field_name.lower()
+                if lower in INTERNAL_FIELD_EXACT_LOWER or any(p in lower for p in INTERNAL_FIELD_CONTAINS):
+                    filtered_internal.append(field_name)
                     continue
                 original_name = field_name
                 base = field_name
@@ -143,6 +170,8 @@ def extract_acroform(pdf_bytes: bytes, original_filename: str) -> FormSchema:
             "truncated_to_first_page": True,
             "field_cap_reached": len(collected) >= MAX_FIELDS,
             "total_fields_raw": len(collected),
+            "filtered_internal_count": len(filtered_internal),
+            "filtered_internal_sample": filtered_internal[:10],
         }
     )
     return schema

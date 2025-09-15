@@ -14,42 +14,18 @@ from pdf_form import (
     fill_acroform,
 )
 from pypdf import PdfReader
-
-PORT = 8000
-MAX_SIZE = 5 * 1024 * 1024  # 5MB
+from config import (
+    HTTP_PORT, MAX_FILE_SIZE, FORM_SESSION_TIMEOUT, 
+    SESSION_CLEANUP_INTERVAL, ERROR_MESSAGES
+)
+from session_manager import get_session_manager
+from pdf_extractor import PDFExtractor
 
 storage_manager = FormStorageManager()
 storage_manager.start_background_cleanup()
 
-# In-memory mapping: form_id -> { schema, state, confirmed }
-FORM_SESSIONS = {}
-
-INACTIVITY_TIMEOUT = 600  # 10 minutes
-
-def _cleanup_form_sessions(interval: int = 180):  # every 3 minutes
-    import threading
-    def loop():
-        while True:
-            try:
-                now = time.time()
-                stale = []
-                for fid, data in list(FORM_SESSIONS.items()):
-                    if now - data.get('last_activity', now) > INACTIVITY_TIMEOUT:
-                        stale.append(fid)
-                for fid in stale:
-                    try:
-                        del FORM_SESSIONS[fid]
-                        storage_manager.delete(fid)
-                        print(f"[cleanup] Removed inactive form session {fid}")
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            time.sleep(interval)
-    t = threading.Thread(target=loop, daemon=True)
-    t.start()
-
-_cleanup_form_sessions()
+# Get the global session manager
+session_manager = get_session_manager(storage_manager)
 
 class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
     """HTTP handler serving static files plus form endpoints.
@@ -71,8 +47,18 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.end_headers()
+            try:
+                self.wfile.write(data)
+            except ConnectionAbortedError:
+                # Client went away mid-response; ignore silently
+                pass
+            except OSError:
+                pass
+        except Exception:
+            # Suppress secondary errors attempting to send error responses
+            pass
 
     # ---- Helpers ----
     def _parse_multipart(self):
@@ -82,7 +68,7 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             return None, 'bad_content_type'
         boundary = match.group(1)
         length = int(self.headers.get('Content-Length','0'))
-        if length > MAX_SIZE:
+        if length > MAX_FILE_SIZE:
             return None, 'file_too_large'
         body = self.rfile.read(length)
         parts = body.split(('--'+boundary).encode('utf-8'))
@@ -108,65 +94,43 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
     def handle_upload_form(self):
         try:
             replaced_previous = False
-            if any(FORM_SESSIONS):
-                # Auto-clear previous session so user can upload a new PDF without manual reset
-                for fid in list(FORM_SESSIONS.keys()):
-                    try:
-                        del FORM_SESSIONS[fid]
-                        storage_manager.delete(fid)
-                    except Exception:
-                        pass
+            if session_manager.get_session_count() > 0:
+                # Auto-clear previous sessions so user can upload a new PDF without manual reset
+                session_manager.clear_all_sessions()
                 replaced_previous = True
             parsed, err = self._parse_multipart()
             if err:
                 status = 400 if err != 'internal_error' else 500
-                msg_map = {
-                    'bad_content_type':'Expected multipart/form-data',
-                    'file_too_large':'File too large (>5MB)',
-                    'no_file':'No file part named file'
-                }
-                self._send_json({'ok': False,'error':err,'message':msg_map.get(err, err)}, status); return
+                self._send_json({
+                    'ok': False,
+                    'error': err,
+                    'message': ERROR_MESSAGES.get(err, err)
+                }, status)
+                return
             filename, file_bytes = parsed
-            if len(file_bytes) > MAX_SIZE:
-                self._send_json({'ok': False,'error':'file_too_large','message':'File too large (>5MB)'}, 400); return
-            if not file_bytes.startswith(b'%PDF'):
-                self._send_json({'ok': False,'error':'not_pdf','message':'Not a PDF file'}, 400); return
-            # Encryption check
-            try:
-                reader = PdfReader(BytesIO(file_bytes))
-                if getattr(reader, 'is_encrypted', False):
-                    self._send_json({'ok': False,'error':'encrypted_pdf','message':'Encrypted PDF not supported'}, 400); return
-            except Exception:
-                pass
-            try:
-                schema = extract_acroform(file_bytes, filename)
-            except NotAcroFormError:
-                self._send_json({'ok': False,'error':'not_acroform','message':'PDF has no AcroForm'}, 400); return
-            except NoAcroFormFieldsError:
-                self._send_json({'ok': False,'error':'no_fields','message':'AcroForm present but no fields on first page'}, 400); return
-            except Exception as e:
-                self._send_json({'ok': False,'error':'parse_failed','message': str(e)}, 500); return
-
+            
+            # Use the new PDF extractor for processing
+            success, response = PDFExtractor.process_uploaded_pdf(file_bytes, filename)
+            if not success:
+                status = 400 if response.get('error') != 'internal_error' else 500
+                self._send_json(response, status)
+                return
+            
+            # Extract schema from successful response - need to re-extract for internal use
+            result = PDFExtractor.extract_form_schema(file_bytes, filename)
+            schema = result.schema
+            
             form_id = schema.form_id
             storage_manager.create(file_bytes, filename, form_id=form_id)
             schema.metadata['write_name_map'] = {f.name: f.original_name for f in schema.fields}
-            now = time.time()
-            FORM_SESSIONS[form_id] = {
-                'schema': schema,
-                'state': {fname: None for fname in schema.ordered_field_names()},
-                'confirmed': {fname: False for fname in schema.ordered_field_names()},
-                'last_activity': now,
-                'completed': False,
-            }
-            warn = []
-            if schema.metadata.get('total_fields_raw',0) > len(schema.fields):
-                warn.append('fields_truncated')
-            if schema.metadata.get('truncated_to_first_page'):
-                warn.append('first_page_only')
-            payload = {'ok': True, 'schema': schema.to_public_dict(), 'replaced_previous': replaced_previous}
-            if warn:
-                payload['warnings'] = warn
-            self._send_json(payload, 200)
+            
+            # Create session using session manager
+            session = session_manager.create_session(form_id, schema)
+            
+            # Add replacement info to response
+            response['replaced_previous'] = replaced_previous
+            
+            self._send_json(response, 200)
         except Exception as e:
             # Basic logging to stderr / console
             try:
@@ -176,14 +140,24 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': False,'error':'internal_error','message': str(e)}, 500)
 
     def handle_download_filled(self, form_id: str):
-        sess = FORM_SESSIONS.get(form_id)
-        if not sess:
+        session = session_manager.get_session(form_id)
+        if not session:
+            try: print(f"[download] unknown form_id {form_id}")
+            except Exception: pass
             self._send_json({'ok': False,'error':'unknown_form','message':'Unknown form_id'}, 404); return
-        schema = sess['schema']; state = sess['state']
+        
+        schema = session.schema
+        state = session.state
         if not all(state.values()):
+            try:
+                missing = [k for k,v in state.items() if not v]
+                print(f"[download] incomplete form {form_id}, missing={missing}")
+            except Exception: pass
             self._send_json({'ok': False,'error':'incomplete','message':'Form not fully filled'}, 400); return
         original_path = os.path.join(storage_manager.base_dir, form_id, 'original.pdf')
         if not os.path.exists(original_path):
+            try: print(f"[download] original missing for {form_id} expected {original_path}")
+            except Exception: pass
             self._send_json({'ok': False,'error':'missing_original','message':'Original PDF missing'}, 500); return
         with open(original_path,'rb') as f: original_bytes = f.read()
         write_map = schema.metadata.get('write_name_map', {})
@@ -191,6 +165,8 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         try:
             filled_bytes = fill_acroform(original_bytes, translated_state)
         except Exception as e:
+            try: print(f"[download] fill_acroform failed {e}")
+            except Exception: pass
             self._send_json({'ok': False,'error':'fill_failed','message': str(e)}, 500); return
         self.send_response(200)
         self.send_header('Content-Type', 'application/pdf')
@@ -200,9 +176,7 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_reset_form(self):
         try:
-            for fid in list(FORM_SESSIONS.keys()):
-                del FORM_SESSIONS[fid]
-                storage_manager.delete(fid)
+            session_manager.clear_all_sessions()
             self._send_json({'ok': True})
         except Exception as e:
             self._send_json({'ok': False,'error':'reset_failed','message': str(e)}, 500)
@@ -235,41 +209,45 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             data = json.loads(raw.decode('utf-8') or '{}')
             form_id = data.get('form_id')
             updates = data.get('updates', {})
-            if not form_id or form_id not in FORM_SESSIONS:
+            
+            # Correct membership check: use get_session instead of relying on __contains__ (thread-safe path)
+            if not form_id or session_manager.get_session(form_id) is None:
                 self._send_json({'ok': False,'error':'unknown_form'}, 404); return
-            sess = FORM_SESSIONS[form_id]
-            schema = sess['schema']
-            state = sess['state']
-            confirmed = sess['confirmed']
-            changed = {}
-            for k,v in updates.items():
-                if k in state and isinstance(v, str) and v.strip():
-                    val = v[:500]
-                    state[k] = val
-                    confirmed[k] = True
-                    changed[k] = val
-            sess['last_activity'] = time.time()
-            complete = all(state.values())
-            sess['completed'] = complete
-            self._send_json({'ok': True,'updated': changed,'complete': complete,'remaining': len([k for k,v in state.items() if not v])})
+            
+            # Update session state using session manager
+            changed = session_manager.update_session_state(form_id, updates)
+            if changed is None:
+                self._send_json({'ok': False,'error':'unknown_form'}, 404); return
+            
+            session = session_manager.get_session(form_id)
+            complete = session.is_complete() if session else False
+            remaining_count = len(session.get_missing_fields()) if session else 0
+            
+            try:
+                print(f"[update_form_state] form_id={form_id} applied={list(changed.keys())} complete={complete}")
+            except Exception:
+                pass
+            self._send_json({'ok': True,'updated': changed,'complete': complete,'remaining': remaining_count})
         except Exception as e:
             self._send_json({'ok': False,'error':'update_failed','message': str(e)}, 500)
 
     def handle_form_status(self, form_id: str):
         try:
-            sess = FORM_SESSIONS.get(form_id)
-            if not sess:
+            status = session_manager.get_session_status(form_id)
+            if not status:
+                try:
+                    print(f"[form_status] unknown form_id {form_id}")
+                except Exception:
+                    pass
                 self._send_json({'ok': False,'error':'unknown_form'}, 404); return
-            state = sess['state']
-            remaining = [k for k,v in state.items() if not v]
-            self._send_json({'ok': True,'remaining': remaining,'complete': len(remaining)==0})
+            self._send_json({'ok': True,'remaining': status['remaining'],'complete': status['complete']})
         except Exception as e:
             self._send_json({'ok': False,'error':'status_failed','message': str(e)}, 500)
 
 def run():
-    with socketserver.TCPServer(("", PORT), NoCacheHandler) as httpd:
-        print("Serving at port", PORT)
-        print("Open http://localhost:8000/index.html in your browser.")
+    with socketserver.TCPServer(("", HTTP_PORT), NoCacheHandler) as httpd:
+        print("Serving at port", HTTP_PORT)
+        print(f"Open http://localhost:{HTTP_PORT}/index.html in your browser.")
         httpd.serve_forever()
 
 if __name__ == "__main__":

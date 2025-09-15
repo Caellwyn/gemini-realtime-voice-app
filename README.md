@@ -1,69 +1,54 @@
-# Voice Controlled Form Filler (Dating Profile + PDF AcroForm Mode)
+# Voice Controlled PDF Form Filler (Unified Server)
 
-This project provides a browser-based, voice-enabled form filling experience using a Gemini realtime audio dialog model.
+This project provides a browser-based, voice‑enabled workflow for filling AcroForm PDFs using the Gemini real‑time audio dialog API. The app now runs as a **single process** (`app.py`) hosting both:
 
-You can operate in two modes:
+* An HTTP server (static UI + REST endpoints for PDF upload, status, download)
+* A WebSocket realtime bridge (audio streaming, tool call mediation)
 
-1. Dating Profile Mode (original) – Collects 4 structured profile fields with strict turn-taking and confirmation.
-2. PDF Form Mode (new) – Upload an AcroForm PDF (≤5MB) and fill all first-page text fields via voice or manual overrides; then download a still-editable filled PDF.
+The legacy “dating profile” demo mode has been fully removed to simplify the codebase and reduce latency / complexity. All logic is now **PDF‑only**.
 
-Code portions inspired by work from [yeyu](https://github.com/yeyu2/Youtube_demos/tree/main/gemini20-realtime-function).
+Code portions were originally inspired by work from [yeyu](https://github.com/yeyu2/Youtube_demos/tree/main/gemini20-realtime-function) and have since been heavily refactored.
 
 ---
 
-## Quick Start
+## Quick Start (Unified)
 
-1. Install dependencies (from workspace root or this folder):
+1. Install dependencies:
 
    ```powershell
    pip install pypdf google-genai==0.3.0 websockets
    ```
 
-2. Set your Gemini API key (PowerShell example):
+2. Export your API key (PowerShell example):
 
    ```powershell
    $env:GEMINI_API_KEY = "YOUR_KEY_HERE"
    ```
 
-3. Run the HTTP static/file + REST server (serves `index.html` and PDF endpoints):
+3. Start the unified server (HTTP + WebSocket):
 
    ```powershell
-   python server.py
+   python app.py
    ```
 
-4. In a second terminal, start the websocket realtime bridge:
+4. Open the UI: <http://localhost:8000/index.html>
 
-   ```powershell
-   python main.py
-   ```
+That’s it—no second process required. If you previously ran `server.py` and `main.py` separately, they are now **deprecated** (still present for reference).
 
-5. Open the UI: <http://localhost:8000/index.html>
+For engineering/backlog details (future improvements, internal priorities), see `NEXT_TASKS.md`. This README stays focused on human usage & concepts.
 
 ---
 
-## Modes Overview
-
-### 1. Dating Profile Mode
-
-Collects exactly: `eye_color`, `age`, `ideal_date`, `todays_date`. The system instruction enforces:
-
-- Only the next missing field is proactively requested.
-- Multi-field utterances are accepted when user volunteers multiple values.
-- Tool calls: `fill_dating_profile` and `get_profile_state`.
-- Completion requires explicit user confirmation after all filled.
-
-### 2. PDF Form Mode (New)
+## PDF Form Workflow
 
 Workflow:
 
-1. Choose “Upload AcroForm PDF”.
-2. Select PDF (≤5MB). Server extracts first-page AcroForm fields (safety cap, default 300). Duplicate field names get suffixed (`_2`, `_3`).
-3. UI renders generic text inputs (all required, initially empty). Fields can be filled:
-   - By voice: model calls `fill_form_fields` with user-provided values.
-   - Manually: editing an input sends a `user_edit` websocket message.
-4. When all fields are filled, the server sends `form_complete:true`; UI shows a confirm prompt.
-5. On confirmation (`confirm_form: true`), server returns `download_ready:true` enabling a filled PDF download (still editable; not flattened).
-6. Idle sessions (no activity ≥10 min) are purged; UI shows an inactivity banner on next poll.
+1. Upload an AcroForm PDF (≤5MB).
+2. First‑page text fields (capped at 300) are extracted, normalized, and displayed.
+3. Provide values by speaking; the model MUST call the `update_pdf_fields` tool every time you supply one or more values.
+4. You can manually override any field—these edits are immediately synced to the model context and state.
+5. When all fields are filled you get a confirmation prompt; confirming enables a filled (still editable) PDF download.
+6. Inactive sessions (10 min) are cleaned; the UI will show an inactivity banner if you return.
 
 ---
 
@@ -71,10 +56,14 @@ Workflow:
 
 Component | Responsibilities
 ----------|------------------
-`server.py` | Static file hosting + REST endpoints (`/upload_form`, `/download_filled/<id>`, `/reset_form`, `/update_form_state`, `/form_status/<id>`)
-`main.py` | WebSocket bridge to Gemini realtime API: tool call mediation, mode branching, audio streaming
-`pdf_form/` | Modular PDF logic (`extract.py`, `fill.py`, `schema.py`, `storage.py`, `session_state.py`)
-Frontend (`index.html`) | Mode selection, audio capture/playback, dynamic form rendering, websocket client, PDF UI
+`app.py` | Unified entry: spawns HTTP server thread + WebSocket realtime loop
+`pdf_form/` | PDF extraction, schema modeling, state & fill operations
+`session_manager.py` | In‑memory tracking of active PDF form sessions
+`form_manager.py` | Runtime form state (PDF only) and system instruction generation
+`tool_response_builder.py` | Standardizes tool responses + client notifications
+`audio_handler.py` | Audio chunk encode/decode + playback relay
+`websocket_handler.py` | Helper utilities (latency logging, sync helpers, realtime input routing)
+`index.html` | Single‑page UI: upload, dynamic field grid, voice assistant toggle
 
 ---
 
@@ -88,7 +77,7 @@ Frontend (`index.html`) | Mode selection, audio capture/playback, dynamic form r
 
 ---
 
-## REST Endpoints
+## REST Endpoints (served by `app.py`)
 
 Endpoint | Method | Description | Success Payload
 ---------|--------|-------------|----------------
@@ -106,11 +95,10 @@ Error payloads include `{ ok:false, error, message? }`.
 
 Message | Purpose (Mode)
 --------|----------------
-`{ setup: {..., mode: 'dating'\| 'pdf_form' } }` | Initialize session & configure model/tools
-`{ realtime_input: {...} }` | Audio/text streaming
-`{ user_edit: { field, value } }` | Manual override (dating or PDF mode)
-`{ pdf_schema: { ...schema... } }` | Provide parsed schema to model so dynamic tools can be registered
-`{ confirm_form: true }` | User confirmed all PDF fields
+`{ setup: { generation_config..., voice_name, enable_vad, pdf_field_names[], pdf_form_id } }` | Initialize session & tools
+`{ realtime_input: {...} }` | Audio stream chunks and optional inline text
+`{ user_edit: { field, value } }` | Manual override
+`{ confirm_form: true }` | User confirmed all fields
 
 ### WebSocket Messages (Server → Client)
 
@@ -118,38 +106,30 @@ Message | Description
 --------|------------
 `{ text: "..." }` | Model textual response
 `{ audio: base64, audio_mime_type }` | Model audio chunk
-`{ profile_tool_response: {...} }` | Dating mode tool update
-`{ profile_state_snapshot: {...} }` | Dating state query result
-`{ form_tool_response: { updated:{...}, remaining:int } }` | PDF tool update
-`{ form_state: {...} }` | PDF state snapshot
-`{ form_complete: true }` | All PDF fields filled; prompt for confirm
-`{ download_ready: true, form_id }` | Confirmed & filled PDF is ready
-`{ error: "message" }` | Error condition (may include `unknown_form`)
+`{ form_tool_response: { updated:{...}, remaining:int } }` | Applied field updates
+`{ form_state: {...} }` | Snapshot (on explicit model query)
+`{ form_complete: true }` | All fields captured, UI should ask user to confirm
+`{ download_ready: true, form_id }` | Confirmation accepted; PDF ready to download
+`{ error: "message" }` | Error condition (e.g. `unknown_form` after expiration)
 
 ---
 
-## Tool Definitions
+## Tool Definitions (PDF Only)
 
-Dating Mode Tools:
+Tool | Purpose
+-----|--------
+`update_pdf_fields` | Persist one or more field values (JSON string in `updates` argument)
+`get_form_state` | Retrieve counts + remaining sample when the model is uncertain
 
-- `fill_dating_profile` (eye_color, age, ideal_date, todays_date)
-- `get_profile_state`
-
-PDF Mode Tools (dynamic):
-
-- `fill_form_fields` – Arbitrary subset of schema field names with string values (≤500 chars)
-- `get_form_state`
-
-Server validation for `fill_form_fields`:
-
-- Unknown field → ignored (reported to model)
-- Empty/whitespace → ignored
-- >500 chars → truncated
-- Accepts multi-field updates
+Validation rules:
+* Unknown field names are ignored (reported back in tool response)
+* Empty / whitespace‑only values ignored
+* Values > 500 chars truncated
+* Multi‑field batches encouraged when user supplies them together
 
 ---
 
-## Completion Logic (PDF Mode)
+## Completion Logic
 
 1. Every successful `fill_form_fields` or `user_edit` updates field value + marks confirmed.
 2. When all fields non-null: server sends `{ form_complete:true }` and instructs model to ask for confirmation.
@@ -171,8 +151,8 @@ Server validation for `fill_form_fields`:
 Folder | Notes
 -------|------
 `pdf_form/` | Modular and testable: can later add OCR, flattening
-`main.py` | Dynamic tool injection after receiving `pdf_schema` message (Gemini live session update)
-`index.html` | Minimal dependency (Material Design Lite + custom styles)
+`app.py` | Unified runner; removes need for multi‑process orchestration
+`index.html` | PDF‑only UI with a single Voice Assistant toggle
 
 ---
 
@@ -203,6 +183,21 @@ Unknown field in tool call | Ignored; model receives note (partial/ignored feedb
 - Nearest text label inference
 - Field type classification & regex enforcement
 - Session persistence / database storage
+- Better field name parsing & normalization (improve label inference / canonicalization)
+- Debug filled PDF download tool (server-side validator / diff of filled vs expected)
+- More graceful unified app shutdown (drain active WS sessions, flush logs, structured exit codes)
+
+---
+
+## Next Session Starter Tasks
+
+These are the top three actionable items to tackle first when development resumes:
+
+1. Debug filled PDF download: add integrity/diff utility comparing in-memory state vs. generated PDF (log mismatches).
+2. Graceful shutdown improvements: drain active WebSocket sessions, await in-flight tool responses, structured exit code + summary log.
+3. Field name normalization pass: strip noise (underscores, trailing numerics), infer labels from nearby text objects, add canonical mapping for prompt clarity.
+
+Keep these small and incremental—each can be delivered independently.
 
 ---
 
@@ -220,6 +215,18 @@ Download missing values | Ensure confirmation was sent; re-check if `download_re
 ## License / Attribution
 
 See source headers; example scaffold draws inspiration from linked demos. Adapt as needed.
+
+---
+
+## Migration Notes (from dual‑process architecture)
+
+Old | New
+----|----
+Run `python server.py` + `python main.py` | Run `python app.py`
+Mode negotiation (`mode: dating | pdf_form`) | Removed (always PDF)
+Inter‑process pdf_sync HTTP POST | Direct in‑process sync (HTTP fallback retained for legacy multi‑process use)
+
+If you still have local scripts referencing `main.py`, update them to call `app.py`.
 
 ---
 

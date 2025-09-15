@@ -77,147 +77,102 @@
         <header class="mdl-layout__header">
             <div class="mdl-layout__header-row">
                 <!-- Title -->
-                <span class="mdl-layout-title">Voice Form Fill - Multi Mode (Dating / PDF)</span>
+                <span class="mdl-layout-title">Voice Form Fill</span>
+                <div style="margin-left:auto; display:flex; gap:8px; align-items:center; font-size:12px;">
+                    <label for="logLevelSelect" style="font-weight:600;">Log:</label>
+                    <select id="logLevelSelect" class="mdl-textfield__input" style="height:28px;">
+                        <option value="error">error</option>
+                        <option value="warn">warn</option>
+                        <option value="info" selected>info</option>
+                        <option value="debug">debug</option>
+                        <option value="off">off</option>
+                    </select>
+                    <label class="mdl-checkbox mdl-js-checkbox mdl-js-ripple-effect" for="logVerboseAudio">
+                        <input type="checkbox" id="logVerboseAudio" class="mdl-checkbox__input">
+                        <span class="mdl-checkbox__label">Audio</span>
+                    </label>
+                </div>
             </div>
         </header>
         <main class="mdl-layout__content">
             <div class="page-content">
                 <div class="demo-content">
-                    <!-- Mode Selection Gate -->
-                    <div id="modeGate" style="display:flex; gap:16px; margin:12px 0 24px 0; flex-wrap:wrap;">
-                        <button id="btnModeDating" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored">Use Default Dating Profile Form</button>
-                        <button id="btnModePdf" class="mdl-button mdl-js-button mdl-button--raised">Upload AcroForm PDF</button>
-                        <span id="modeStatus" style="align-self:center; font-size:12px; color:#555;">Mode not chosen.</span>
-                    </div>
-
-                    <!-- PDF Upload Panel (hidden until PDF mode selected) -->
-                    <div id="pdfUploadPanel" style="display:none; width:100%; max-width:780px; border:1px solid #ccc; padding:14px; border-radius:8px; background:#fafafa;">
+                    <!-- PDF Upload Panel -->
+                    <div id="pdfUploadPanel" style="width:100%; max-width:780px; border:1px solid #ccc; padding:14px; border-radius:8px; background:#fafafa;">
                         <strong>Upload AcroForm PDF</strong>
                         <form id="pdfUploadForm" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                             <input type="file" id="pdfFileInput" accept="application/pdf" aria-label="PDF file" />
                             <button type="submit" class="mdl-button mdl-js-button mdl-button--raised">Upload & Parse</button>
-                            <button type="button" id="btnCancelPdfMode" class="mdl-button mdl-js-button">Cancel</button>
                         </form>
                         <div id="pdfUploadStatus" style="margin-top:8px; font-size:12px; color:#444;"></div>
                         <div id="pdfWarnings" style="margin-top:4px; font-size:11px; color:#b05000;"></div>
                     </div>
 
-                    <!-- Model Selector -->
-                    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
-                        <label for="modelSelect">Model:</label>
-                        <select id="modelSelect" class="mdl-textfield__input">
-                            <option value="gemini-2.5-flash-preview-native-audio-dialog">
-                                gemini-2.5-flash-preview-native-audio-dialog
-                            </option>
-                            <option value="gemini-2.0-flash-live-001" selected>gemini-2.0-flash-live-001</option>
-                        </select>
-                    </div>
-
-                    <!-- Voice Selector -->
-                    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
-                        <label for="voiceSelect">Voice:</label>
-                        <select id="voiceSelect" class="mdl-textfield__input">
-                            <option value="Puck" selected>Puck — Conversational, friendly</option>
-                            <option value="Charon">Charon — Deep, authoritative</option>
-                            <option value="Kore">Kore — Neutral, professional</option>
-                            <option value="Fenrir">Fenrir — Warm, approachable</option>
-                            <option value="Leda">Leda — Youthful</option>
-                            <option value="Orus">Orus — Firm</option>
-                            <option value="Aoede">Aoede — Breezy</option>
-                            <option value="Callirrhoe">Callirrhoe — Easy-going</option>
-                            <option value="Enceladus">Enceladus — Breathy</option>
-                            <option value="Iapetus">Iapetus — Clear</option>
-                            <option value="Umbriel">Umbriel — Easy-going</option>
-                            <option value="Algieba">Algieba — Smooth</option>
-                            <option value="Despina">Despina — Smooth</option>
-                            <option value="Erinome">Erinome — Clear</option>
-                            <option value="Algenib">Algenib — Gravelly</option>
-                            <option value="Rasalgethi">Rasalgethi — Informative</option>
-                            <option value="Laomedeia">Laomedeia — Upbeat</option>
-                            <option value="Achernar">Achernar — Soft</option>
-                            <option value="Alnilam">Alnilam — Firm</option>
-                            <option value="Schedar">Schedar — Even</option>
-                            <option value="Gacrux">Gacrux — Mature</option>
-                            <option value="Pulcherrima">Pulcherrima — Forward</option>
-                            <option value="Achird">Achird — Friendly</option>
-                            <option value="Zubenelgenubi">Zubenelgenubi — Casual</option>
-                            <option value="Vindemiatrix">Vindemiatrix — Gentle</option>
-                            <option value="Sadachbia">Sadachbia — Lively</option>
-                            <option value="Sadaltager">Sadaltager — Knowledgeable</option>
-                            <option value="Sulafat">Sulafat — Warm</option>
-                            <option value="Zephyr">Zephyr — Bright</option>
-                        </select>
-                    </div>
-
-                    <!-- VAD Toggle -->
-                    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
-                        <label class="mdl-checkbox mdl-js-checkbox mdl-js-ripple-effect" for="vadCheckbox">
-                            <input type="checkbox" id="vadCheckbox" class="mdl-checkbox__input">
-                            <span class="mdl-checkbox__label">Enable VAD (auto start/stop)</span>
-                        </label>
-                    </div>
-                    <!-- Voice Control Buttons -->
-                    <div class="button-group">
-                        <button id="startButton"
-                            class="mdl-button mdl-js-button mdl-button--fab mdl-button--mini-fab mdl-button--colored">
-                            <i class="material-icons">mic</i>
-                        </button>
-                        <button id="stopButton"
-                            class="mdl-button mdl-js-button mdl-button--fab mdl-button--mini-fab">
-                            <i class="material-icons">mic_off</i>
-                        </button>
-                    </div>
-
-                    <!-- Test Mode Toggle -->
-                    <div style="padding-bottom: 20px;">
-                        <label class="mdl-checkbox mdl-js-checkbox mdl-js-ripple-effect" for="testModeCheckbox">
-                            <input type="checkbox" id="testModeCheckbox" class="mdl-checkbox__input" checked>
-                            <span class="mdl-checkbox__label">Test Mode</span>
+                    <!-- Voice Assistant Toggle -->
+                    <div id="voice-assistant-toggle" style="margin-top: 20px; display: none;">
+                        <label class="mdl-switch mdl-js-switch mdl-js-ripple-effect" for="assistantSwitch">
+                            <input type="checkbox" id="assistantSwitch" class="mdl-switch__input">
+                            <span class="mdl-switch__label">Voice Assistant</span>
                         </label>
                     </div>
 
-                    <!-- Removed light status (legacy) -->
 
-                    <!-- Dating Profile Card -->
-                    <div class="profile-card" id="profileCard">
-                        <div class="romance-title">Dating Profile Builder</div>
-                        <div class="small-note">Speak naturally. The assistant will fill or refine the profile via a structured tool call.</div>
-                        <div class="profile-grid" id="profileFields">
-                            <div class="field-block" id="field_eye_color">
-                                <label for="eyeColorInput">Eye Color</label>
-                                <select id="eyeColorInput">
-                                    <option value="">(select)</option>
-                                    <option value="blue">Blue</option>
-                                    <option value="brown">Brown</option>
-                                    <option value="green">Green</option>
-                                    <option value="hazel">Hazel</option>
-                                </select>
-                            </div>
-                            <div class="field-block" id="field_age">
-                                <label for="ageInput">Age</label>
-                                <input id="ageInput" type="number" min="1" max="120" placeholder="e.g. 29">
-                            </div>
-                            <div class="field-block" id="field_todays_date">
-                                <label for="todayDateInput">Today's Date</label>
-                                <input id="todayDateInput" type="text" placeholder="YYYY-MM-DD">
-                            </div>
-                            <div class="field-block" style="grid-column:1 / -1;" id="field_ideal_date">
-                                <label for="idealDateInput">Ideal Date</label>
-                                <textarea id="idealDateInput" rows="2" placeholder="Sunset walk, cozy cafe..." ></textarea>
-                            </div>
+                    <!-- Model and Voice Configuration -->
+                    <div style="margin-bottom: 12px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                        <div>
+                            <label for="modelSelect">Model:</label>
+                            <select id="modelSelect" class="mdl-textfield__input">
+                                <option value="gemini-2.5-flash-preview-native-audio-dialog">
+                                    gemini-2.5-flash-preview-native-audio-dialog
+                                </option>
+                                <option value="gemini-2.0-flash-live-001" selected>gemini-2.0-flash-live-001</option>
+                            </select>
                         </div>
-                        <div class="profile-actions">
-                            <button class="pill-btn danger" id="btnResetProfile" title="Clear local profile state">Reset</button>
+                        <div>
+                            <label for="voiceSelect">Voice:</label>
+                            <select id="voiceSelect" class="mdl-textfield__input">
+                                <option value="Puck" selected>Puck — Conversational, friendly</option>
+                                <option value="Charon">Charon — Deep, authoritative</option>
+                                <option value="Kore">Kore — Neutral, professional</option>
+                                <option value="Fenrir">Fenrir — Warm, approachable</option>
+                                <option value="Leda">Leda — Youthful</option>
+                                <option value="Orus">Orus — Firm</option>
+                                <option value="Aoede">Aoede — Breezy</option>
+                                <option value="Callirrhoe">Callirrhoe — Easy-going</option>
+                                <option value="Enceladus">Enceladus — Breathy</option>
+                                <option value="Iapetus">Iapetus — Clear</option>
+                                <option value="Umbriel">Umbriel — Easy-going</option>
+                                <option value="Algieba">Algieba — Smooth</option>
+                                <option value="Despina">Despina — Smooth</option>
+                                <option value="Erinome">Erinome — Clear</option>
+                                <option value="Algenib">Algenib — Gravelly</option>
+                                <option value="Rasalgethi">Rasalgethi — Informative</option>
+                                <option value="Laomedeia">Laomedeia — Upbeat</option>
+                                <option value="Achernar">Achernar — Soft</option>
+                                <option value="Alnilam">Alnilam — Firm</option>
+                                <option value="Schedar">Schedar — Even</option>
+                                <option value="Gacrux">Gacrux — Mature</option>
+                                <option value="Pulcherrima">Pulcherrima — Forward</option>
+                                <option value="Achird">Achird — Friendly</option>
+                                <option value="Zubenelgenubi">Zubenelgenubi — Casual</option>
+                                <option value="Vindemiatrix">Vindemiatrix — Gentle</option>
+                                <option value="Sadachbia">Sadachbia — Lively</option>
+                                <option value="Sadaltager">Sadaltager — Knowledgeable</option>
+                                <option value="Sulafat">Sulafat — Warm</option>
+                                <option value="Zephyr">Zephyr — Bright</option>
+                            </select>
                         </div>
-                        <div class="profile-status" id="profileStatus"></div>
-                        <div class="divider-heart">♡</div>
-                        <div id="profileBadges"></div>
+                        <div>
+                            <label class="mdl-checkbox mdl-js-checkbox mdl-js-ripple-effect" for="vadCheckbox">
+                                <input type="checkbox" id="vadCheckbox" class="mdl-checkbox__input">
+                                <span class="mdl-checkbox__label">Enable VAD</span>
+                            </label>
+                        </div>
                     </div>
-
                     <!-- Generic PDF Form Collector (hidden until PDF mode active + schema loaded) -->
-                    <div class="profile-card" id="pdfFormCard" style="display:none;">
+                    <div class="profile-card" id="pdfFormCard" style="display:none; margin-top: 20px;">
                         <div style="font-weight:700; font-size:18px; margin-bottom:4px;">PDF Form Field Collector</div>
-                        <div class="small-note" id="pdfFormMetaNote">Upload a PDF with AcroForm fields (first page only). All fields required.</div>
+                        <div class="small-note" id="pdfFormMetaNote">Upload a PDF with AcroForm fields. All fields required.</div>
                         <div id="pdfFieldSummary" class="profile-status" style="margin-top:4px;"></div>
                         <div id="pdfFieldsContainer" class="profile-grid" style="margin-top:10px;"></div>
                         <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
@@ -245,19 +200,56 @@
     </div>
 
     <script defer>
+        // -------- Lightweight Client Logger ---------
+        const ClientLogger = (() => {
+            const levels = { error:0, warn:1, info:2, debug:3 };
+            let currentLevel = 'info';
+            let verboseAudio = false;
+            const lastMessageAt = new Map();
+            const THROTTLE_MS = 1500; // collapse identical spammy messages
+            function setLevel(l){ currentLevel = l in levels ? l : 'info'; }
+            function setVerboseAudio(v){ verboseAudio = !!v; }
+            function shouldLog(l){ if(currentLevel==='off') return false; return levels[l] <= levels[currentLevel]; }
+            function logAt(l, args){
+                if(!shouldLog(l)) return;
+                try {
+                    const key = JSON.stringify(args);
+                    const now = performance.now();
+                    const last = lastMessageAt.get(key) || 0;
+                    if(now - last < THROTTLE_MS && l !== 'error') return; // throttle non-error repeats
+                    lastMessageAt.set(key, now);
+                } catch(e){}
+                // Delegate to native console
+                (console[l]||console.log)(...args);
+            }
+            return {
+                error: (...a)=>logAt('error', a),
+                warn: (...a)=>logAt('warn', a),
+                info: (...a)=>logAt('info', a),
+                debug: (...a)=>logAt('debug', a),
+                audio: (...a)=>{ if(verboseAudio) logAt('debug', a); },
+                setLevel, setVerboseAudio
+            };
+        })();
+        window.AppLogger = ClientLogger;
+
+        // Hook up UI controls after DOM ready
+        document.addEventListener('DOMContentLoaded', () => {
+            const levelSel = document.getElementById('logLevelSelect');
+            const audioChk = document.getElementById('logVerboseAudio');
+            if(levelSel){ levelSel.addEventListener('change', ()=> AppLogger.setLevel(levelSel.value)); }
+            if(audioChk){ audioChk.addEventListener('change', ()=> AppLogger.setVerboseAudio(audioChk.checked)); }
+        });
         const URL = "ws://localhost:9082";
-    const startButton = document.getElementById('startButton');
-    const stopButton = document.getElementById('stopButton');
-    // Mode controls
-    const btnModeDating = document.getElementById('btnModeDating');
-    const btnModePdf = document.getElementById('btnModePdf');
-    const modeStatus = document.getElementById('modeStatus');
+    const assistantSwitch = document.getElementById('assistantSwitch');
+    const voiceAssistantToggle = document.getElementById('voice-assistant-toggle');
+
+    // PDF form elements
     const pdfUploadPanel = document.getElementById('pdfUploadPanel');
     const pdfUploadForm = document.getElementById('pdfUploadForm');
     const pdfFileInput = document.getElementById('pdfFileInput');
     const pdfUploadStatus = document.getElementById('pdfUploadStatus');
     const pdfWarnings = document.getElementById('pdfWarnings');
-    const btnCancelPdfMode = document.getElementById('btnCancelPdfMode');
     const pdfFormCard = document.getElementById('pdfFormCard');
     const pdfFieldsContainer = document.getElementById('pdfFieldsContainer');
     const pdfFieldSummary = document.getElementById('pdfFieldSummary');
@@ -265,33 +257,20 @@
     const btnResetPdf = document.getElementById('btnResetPdf');
     const btnDownloadPdf = document.getElementById('btnDownloadPdf');
     const pdfCompletionBanner = document.getElementById('pdfCompletionBanner');
+
     let webSocket = null;
         let audioContext = null;
         let playbackWorkletNode = null;
         let recordingWorkletNode = null;
         let mediaStream = null;
+    // Buffer for early audio chunks that arrive before playback pipeline is ready
+    const pendingAudioQueue = [];
+    let playbackReady = false;
     const clearTextBtn = document.getElementById('clearTextBtn');
     const modalityLabel = document.getElementById('modalityLabel');
     const responseTextBox = document.getElementById('responseTextBox');
 
-        // Profile form elements
-    const eyeColorInput = document.getElementById('eyeColorInput');
-        const ageInput = document.getElementById('ageInput');
-        const idealDateInput = document.getElementById('idealDateInput');
-        const todayDateInput = document.getElementById('todayDateInput');
-        const btnResetProfile = document.getElementById('btnResetProfile');
-        const profileStatus = document.getElementById('profileStatus');
-        const profileBadges = document.getElementById('profileBadges');
-
-        // Local profile state mirror
-    const profileState = { eye_color: null, age: null, ideal_date: null, todays_date: null };
-    const confirmedState = { eye_color: false, age: false, ideal_date: false, todays_date: false };
-    const manualOverrideTimestamp = { eye_color:0, age:0, ideal_date:0, todays_date:0 };
-    const lastToolApplyTimestamp   = { eye_color:0, age:0, ideal_date:0, todays_date:0 };
-    let completionPromptShown = false;
-    let sessionCompleted = false;
-    // Mode + PDF session state
-    let currentMode = null; // 'dating' | 'pdf'
+        // PDF session state
     let pdfSchema = null;
     let pdfFormId = null;
     let pdfState = {}; // fieldName -> value
@@ -300,208 +279,77 @@
     let pdfDownloadReady = false;
     let pdfFieldsOrder = [];
 
-    function updateProfileUI() {
-            // Always overwrite visible inputs with latest state (manual overrides already applied)
-            if (profileState.eye_color !== null) eyeColorInput.value = profileState.eye_color;
-            if (profileState.age !== null) ageInput.value = profileState.age;
-            if (profileState.ideal_date !== null) idealDateInput.value = profileState.ideal_date;
-            if (profileState.todays_date !== null) todayDateInput.value = profileState.todays_date;
+    // Removed profile state variables
 
-            const missing = Object.entries(profileState).filter(([_,v]) => !v);
-            const allFilled = missing.length === 0;
+    function resetPdfState() {
+        pdfSchema = null;
+        pdfFormId = null;
+        pdfState = {};
+        pdfConfirmed = {};
+        pdfFieldsOrder = [];
+        pdfDownloadReady = false;
+        pdfCompletionBanner.textContent = '';
+        pdfFormCard.style.display = 'none';
+        pdfUploadPanel.style.display = 'block';
+        voiceAssistantToggle.style.display = 'none';
+        if (assistantSwitch.checked) {
+            assistantSwitch.parentElement.MaterialSwitch.off();
+        }
+    }
 
-            // Field badge display with confirmation status
-            profileBadges.innerHTML = '';
-            ['eye_color','age','ideal_date','todays_date'].forEach(k => {
-                const v = profileState[k];
-                if (!v) return;
-                const badge = document.createElement('span');
-                badge.className = 'inline-badge fade-in';
-                badge.textContent = k + ': ' + (''+v).slice(0,40) + (confirmedState[k] ? ' ✓' : ' (unconfirmed)');
-                profileBadges.appendChild(badge);
-            });
+    function sendUserEdit(field, value) {
+        if (!webSocket || webSocket.readyState !== WebSocket.OPEN) return;
+        webSocket.send(JSON.stringify({ user_edit: { field, value } }));
+        AppLogger.debug('Sent user_edit', field, value);
+    }
 
-            // Mark missing visually
-            ['eye_color','age','ideal_date','todays_date'].forEach(f => {
-                const el = document.getElementById('field_'+f.replace('todays_date','todays_date'));
-                if (!el) return;
-                if (!profileState[f]) el.classList.add('missing'); else el.classList.remove('missing');
-            });
+    window.addEventListener("load", async () => {
+        // Update component state for MDL
+        componentHandler.upgradeDom();
 
-            const unconfirmed = Object.entries(confirmedState).filter(([k,v]) => profileState[k] && !v).map(([k])=>k);
-            if (!allFilled) {
-                profileStatus.textContent = `${missing.length} field(s) still missing.`;
-            } else if (unconfirmed.length) {
-                profileStatus.textContent = 'All fields filled. Awaiting confirmation for: ' + unconfirmed.join(', ');
+        assistantSwitch.addEventListener('change', (event) => {
+            if (event.currentTarget.checked) {
+                AppLogger.info("Voice assistant enabled. Connecting WebSocket.");
+                startAudioInput();
             } else {
-                profileStatus.textContent = 'All fields filled & confirmed.';
-            }
-
-            // Trigger completion prompt only when all filled AND all confirmed
-            if (allFilled && unconfirmed.length === 0 && !completionPromptShown && !sessionCompleted) {
-                showCompletionPrompt();
-            }
-        }
-    function resetProfileState() {
-            profileState.eye_color = null; profileState.age = null; profileState.ideal_date = null; profileState.todays_date = null;
-            eyeColorInput.value=''; ageInput.value=''; idealDateInput.value=''; todayDateInput.value='';
-            updateProfileUI();
-        }
-    // Removed buildMissingFieldsPrompt & buildUserHintPrompt (no longer used)
-    function sendTextPrompt(text) {
-            if (!webSocket || webSocket.readyState !== WebSocket.OPEN) { console.warn('WS not open'); return; }
-            webSocket.send(JSON.stringify({ realtime_input: { text } }));
-        }
-        btnResetProfile.addEventListener('click', ()=> { resetProfileState(); updateProfileUI(); });
-        function sendUserEdit(field, value) {
-            if (!webSocket || webSocket.readyState !== WebSocket.OPEN || document.getElementById('testModeCheckbox').checked) return;
-            webSocket.send(JSON.stringify({ user_edit: { field, value } }));
-            console.log('Sent user_edit', field, value);
-        }
-        function markConfirmed(field) { confirmedState[field] = true; }
-        // Manual overrides: update state, mark confirmed, timestamp, send delta
-        eyeColorInput.addEventListener('change', () => {
-            const v = (eyeColorInput.value||'').toLowerCase();
-            if (!v) { profileState.eye_color = null; confirmedState.eye_color=false; updateProfileUI(); return; }
-            if (!['blue','brown','green','hazel'].includes(v)) { alert('Invalid eye color'); eyeColorInput.value=''; return; }
-            profileState.eye_color = v; confirmedState.eye_color=true; manualOverrideTimestamp.eye_color=Date.now(); sendUserEdit('eye_color', v); updateProfileUI();
-        });
-        ageInput.addEventListener('change', () => {
-            const raw = ageInput.value.trim();
-            if (!raw) { profileState.age=null; confirmedState.age=false; updateProfileUI(); return; }
-            const n = parseInt(raw,10); if (isNaN(n) || n<1 || n>120) { alert('Age must be 1-120'); ageInput.value=''; return; }
-            profileState.age = n; confirmedState.age=true; manualOverrideTimestamp.age=Date.now(); sendUserEdit('age', n); updateProfileUI();
-        });
-        idealDateInput.addEventListener('change', () => {
-            const txt = idealDateInput.value.trim();
-            if (!txt) { profileState.ideal_date=null; confirmedState.ideal_date=false; updateProfileUI(); return; }
-            profileState.ideal_date = txt; confirmedState.ideal_date=true; manualOverrideTimestamp.ideal_date=Date.now(); sendUserEdit('ideal_date', txt); updateProfileUI();
-        });
-        todayDateInput.addEventListener('change', () => {
-            const td = todayDateInput.value.trim();
-            if (!td) { profileState.todays_date=null; confirmedState.todays_date=false; updateProfileUI(); return; }
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(td)) { alert('Date must be YYYY-MM-DD'); return; }
-            profileState.todays_date = td; confirmedState.todays_date=true; manualOverrideTimestamp.todays_date=Date.now(); sendUserEdit('todays_date', td); updateProfileUI();
-        });
-    // Start with ALL fields blank; do not prefill today's date (user must state it explicitly)
-    updateProfileUI();
-
-        function showCompletionPrompt() {
-            completionPromptShown = true;
-            const container = document.createElement('div');
-            container.id = 'completionPrompt';
-            container.className = 'fade-in';
-            container.style.marginTop = '14px';
-            container.style.padding = '12px 14px';
-            container.style.border = '1px solid #ff7aa8';
-            container.style.background = '#fff5f9';
-            container.style.borderRadius = '10px';
-            container.innerHTML = `
-                <strong>Profile complete.</strong><br/>
-                Please confirm everything looks correct.
-                <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                   <button class="pill-btn" id="btnConfirmProfile">Confirm & Finish</button>
-                   <button class="pill-btn alt" id="btnRestartProfile">Start Over</button>
-                </div>
-            `;
-            profileCard.appendChild(container);
-            const confirmBtn = container.querySelector('#btnConfirmProfile');
-            const restartBtn = container.querySelector('#btnRestartProfile');
-            confirmBtn.addEventListener('click', confirmAndCloseSession);
-            restartBtn.addEventListener('click', restartSession);
-        }
-
-        function confirmAndCloseSession() {
-            sessionCompleted = true;
-            // Stop audio and close websocket gracefully
-            try { stopAudioInput(); } catch(e) {}
-            if (webSocket && webSocket.readyState === WebSocket.OPEN) {
-                try { webSocket.close(1000, 'profile complete'); } catch(e) {}
-            }
-            profileStatus.textContent = 'Profile complete, voice assistant disconnected.';
-            addCompletionBanner();
-        }
-
-        function restartSession() {
-            // Remove completion UI and reset state
-            sessionCompleted = false;
-            completionPromptShown = false;
-            const prompt = document.getElementById('completionPrompt');
-            if (prompt) prompt.remove();
-            resetProfileState();
-            profileStatus.textContent = 'Session restarted. Provide or request fields again.';
-            if (!document.getElementById('testModeCheckbox').checked) {
-                connect();
-            }
-        }
-
-        function addCompletionBanner() {
-            let banner = document.getElementById('completionBanner');
-            if (!banner) {
-                banner = document.createElement('div');
-                banner.id = 'completionBanner';
-                banner.style.marginTop = '10px';
-                banner.style.padding = '10px 14px';
-                banner.style.background = '#e3ffe9';
-                banner.style.border = '1px solid #57c27c';
-                banner.style.borderRadius = '8px';
-                banner.style.fontSize = '13px';
-                banner.style.color = '#225c38';
-                banner.innerHTML = '✔ Profile confirmed. Assistant session closed.';
-                profileCard.appendChild(banner);
-            }
-        }
-
-        window.addEventListener("load", async () => {
-            const testModeCheckbox = document.getElementById('testModeCheckbox');
-            
-            // Update component state for MDL
-            componentHandler.upgradeDom();
-
-            testModeCheckbox.addEventListener('change', (event) => {
-                if (event.currentTarget.checked) {
-                    if (webSocket) {
-                        webSocket.close();
-                        webSocket = null;
-                        console.log("Test mode enabled. WebSocket disconnected.");
-                    }
-                } else {
-                    console.log("Test mode disabled. Connecting WebSocket.");
-                    connect();
+                AppLogger.info("Voice assistant disabled. Disconnecting WebSocket.");
+                stopAudioInput();
+                if (webSocket) {
+                    webSocket.close();
+                    webSocket = null;
                 }
-            });
+            }
         });
+    });
 
     function connect() {
-            if (document.getElementById('testModeCheckbox').checked) {
-                console.log("Test mode is on. Skipping WebSocket connection.");
-                return;
+        AppLogger.info("WS connecting", URL);
+
+        webSocket = new WebSocket(URL);
+
+        webSocket.onclose = (event) => {
+            AppLogger.info("WS closed", event.code, event.reason);
+            if (assistantSwitch.checked) {
+                alert("Connection closed");
+                assistantSwitch.parentElement.MaterialSwitch.off();
             }
-            console.log("connecting: ", URL);
+        };
 
-            webSocket = new WebSocket(URL);
+        webSocket.onerror = (event) => {
+            AppLogger.warn("WS error", event);
+        };
 
-            webSocket.onclose = (event) => {
-                console.log("websocket closed: ", event);
-                if (!document.getElementById('testModeCheckbox').checked) {
-                    alert("Connection closed");
-                }
-            };
+        webSocket.onopen = (event) => {
+            AppLogger.info("WS open");
+            sendInitialSetupMessage();
+        };
 
-            webSocket.onerror = (event) => {
-                console.log("websocket error: ", event);
-            };
+        webSocket.onmessage = receiveMessage;
+    }
 
-            webSocket.onopen = (event) => {
-                console.log("websocket open: ", event);
-                sendInitialSetupMessage();
-            };
-
-            webSocket.onmessage = receiveMessage;
-        }
 
         function sendInitialSetupMessage() {
-            console.log("sending setup message");
+            AppLogger.debug("Sending setup message");
             const model = document.getElementById('modelSelect').value;
             const voiceName = document.getElementById('voiceSelect').value;
             const enableVad = document.getElementById('vadCheckbox').checked;
@@ -514,13 +362,12 @@
                     generation_config: { response_modalities: responseModalities, temperature: 0.9 },
                     model: model,
                     voice_name: voiceName,
-                    enable_vad: enableVad,
-                    mode: currentMode === 'pdf' ? 'pdf_form' : 'dating'
+                    enable_vad: enableVad
                 }
             };
 
             // For PDF mode, include field names in setup so tools can be predeclared
-            if (currentMode === 'pdf' && pdfSchema && pdfFieldsOrder.length > 0) {
+            if (pdfSchema && pdfFieldsOrder.length > 0) {
                 setup_client_message.setup.pdf_field_names = pdfFieldsOrder;
                 setup_client_message.setup.pdf_form_id = pdfFormId;
             }
@@ -535,16 +382,8 @@
                 String.fromCharCode.apply(null, new Uint8Array(buffer))
             );
 
-            if (document.getElementById('testModeCheckbox').checked) {
-                console.log("Test mode: looping back audio with a 500ms delay.");
-                setTimeout(() => {
-                    injestAudioChuckToPlay(base64);
-                }, 500);
-                return;
-            }
-
             if (webSocket == null || webSocket.readyState !== WebSocket.OPEN) {
-                console.log("websocket not initialized or not open");
+                AppLogger.warn("Cannot send realtime_input - WS not open");
                 return;
             }
 
@@ -559,28 +398,13 @@
             };
 
             webSocket.send(JSON.stringify(payload));
-            console.log("sent: ", payload);
+            AppLogger.debug("Realtime input sent", payload?.realtime_input ? Object.keys(payload.realtime_input) : Object.keys(payload));
         }
 
     function receiveMessage(event) {
             const messageData = JSON.parse(event.data);
             const response = new Response(messageData);
 
-            // Tool response for profile
-            if (messageData.profile_tool_response) {
-                try {
-                    const r = messageData.profile_tool_response; const now=Date.now();
-                    ['eye_color','age','ideal_date','todays_date'].forEach(k=>{ 
-                        if (r[k]!==undefined && r[k]!==null) {
-                            // Only overwrite if user didn't override after last tool update
-                            if (!manualOverrideTimestamp[k] || manualOverrideTimestamp[k] <= lastToolApplyTimestamp[k]) {
-                                profileState[k]=r[k]; confirmedState[k]=true; lastToolApplyTimestamp[k]=now;
-                            }
-                        }
-                    });
-                    updateProfileUI();
-                } catch(err){ console.warn('Error applying profile tool response', err); }
-            }
             // PDF completion notification
             if (messageData.form_complete) {
                 showPdfConfirmationPrompt();
@@ -616,7 +440,13 @@
                 if (modalityLabel.textContent === 'TEXT') appendToResponseBox(response.text); else displayMessage('GEMINI: ' + response.text);
             }
             if (response.audioData) {
-                injestAudioChuckToPlay(response.audioData, messageData.audio_mime_type || 'audio/pcm');
+                if (!playbackReady) {
+                    // Stash until playback node/AudioContext initialized
+                    pendingAudioQueue.push({chunk: response.audioData, mime: messageData.audio_mime_type || 'audio/pcm'});
+                    AppLogger.audio('Audio chunk queued. Queue length=', pendingAudioQueue.length);
+                } else {
+                    injestAudioChuckToPlay(response.audioData, messageData.audio_mime_type || 'audio/pcm');
+                }
             }
         }
 
@@ -649,14 +479,14 @@
 
         async function injestAudioChuckToPlay(base64AudioChunk, mimeType) {
            try {
-            console.log("injestAudioChuckToPlay: Received audio chunk for playback.");
+            AppLogger.audio("Playback chunk received");
               if (!playbackWorkletNode) {
                 console.error("Playback worklet node not initialized.");
                 return;
               }
               if (audioContext && audioContext.state === "suspended") {
                  await audioContext.resume();
-                 console.log("injestAudioChuckToPlay: Resumed playback audio context.");
+                 AppLogger.audio("Playback context resumed");
               }
               const arrayBuffer = base64ToArrayBuffer(base64AudioChunk);
              let float32Data = convertPCM16LEToFloat32(arrayBuffer);
@@ -677,15 +507,14 @@
                 }
              }
              playbackWorkletNode.port.postMessage(float32Data);
-             console.log("injestAudioChuckToPlay: Sent audio data to playback processor.");
+             AppLogger.audio("Playback frame sent");
             } catch (error) {
-               console.error("Error processing audio chunk:", error);
+               AppLogger.error("Error processing audio chunk", error);
             }
         }
 
 
         async function ensureConnected() {
-            if (document.getElementById('testModeCheckbox').checked) return;
             if (webSocket && webSocket.readyState === WebSocket.OPEN) return;
 
             const waitForOpen = new Promise((resolve, reject) => {
@@ -704,72 +533,69 @@
                 }
                 if (webSocket) webSocket.addEventListener('open', onOpen);
             });
-            try { await waitForOpen; } catch (e) { console.warn('Could not ensure WS open before recording:', e); }
+            try { await waitForOpen; } catch (e) { AppLogger.warn('Could not ensure WS open before recording', e); }
         }
 
         async function startAudioInput() {
             try {
-                console.log("startAudioInput: Attempting to start audio input...");
+                AppLogger.debug("Audio init (full) pre-WS");
 
-                // Open WebSocket first when not in test mode
-                await ensureConnected();
-                if (modalityLabel.textContent === 'TEXT') {
-                    responseTextBox.textContent = '';
-                }
-                
-                // Create and resume a single AudioContext
+                // 1. Create and resume a single AudioContext
                 if (!audioContext) {
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                        sampleRate: 16000
-                    });
-                    console.log("startAudioInput: AudioContext created with 16000 sample rate.");
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+                    AppLogger.audio("AudioContext created");
                 }
                 if (audioContext.state === 'suspended') {
                     await audioContext.resume();
-                    console.log("startAudioInput: AudioContext resumed.");
+                    AppLogger.audio("AudioContext resumed");
                 }
 
-                // Get microphone permission and the audio stream
+                // 2. Get microphone permission and the audio stream
                 mediaStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        channelCount: 1,
-                        sampleRate: 16000
-                    }
+                    audio: { channelCount: 1, sampleRate: 16000 }
                 });
-                console.log("startAudioInput: Successfully got user media (microphone).");
+                AppLogger.audio("Got microphone media");
 
-                // Load both worklet modules
+                // 3. Load all necessary audio worklet modules
                 await Promise.all([
                     audioContext.audioWorklet.addModule('/recording-processor.js'),
                     audioContext.audioWorklet.addModule('/pcm-processor.js')
                 ]);
-                console.log("startAudioInput: All audio worklet modules added.");
-                
-                // Setup recording pipeline
+                AppLogger.audio("Worklet modules loaded");
+
+                // 4. Setup recording pipeline
                 const source = audioContext.createMediaStreamSource(mediaStream);
-                console.log("startAudioInput: MediaStreamSource created.");
                 recordingWorkletNode = new AudioWorkletNode(audioContext, 'recording-processor', {
-                    processorOptions: {
-                        sampleRate: 16000
-                    }
+                    processorOptions: { sampleRate: 16000 }
                 });
-                console.log("startAudioInput: RecordingWorkletNode created.");
-                recordingWorkletNode.port.onmessage = (event) => {
-                    console.log("startAudioInput: Received message from recording processor.");
-                    sendVoiceMessage(event.data);
-                };
+                recordingWorkletNode.port.onmessage = (event) => { sendVoiceMessage(event.data); };
                 source.connect(recordingWorkletNode);
-                console.log("startAudioInput: Recording pipeline connected.");
+                AppLogger.audio("Recording pipeline connected");
 
-                // Setup playback pipeline
+                // 5. Setup playback pipeline
                 playbackWorkletNode = new AudioWorkletNode(audioContext, "pcm-processor");
-                console.log("startAudioInput: PlaybackWorkletNode created.");
                 playbackWorkletNode.connect(audioContext.destination);
-                console.log("startAudioInput: Playback pipeline connected.");
+                AppLogger.audio("Playback pipeline connected");
+                playbackReady = true;
+                // Flush any queued audio that arrived early
+                if (pendingAudioQueue.length) {
+                    AppLogger.audio('Flushing queued audio chunks', pendingAudioQueue.length);
+                    while (pendingAudioQueue.length) {
+                        const item = pendingAudioQueue.shift();
+                        await injestAudioChuckToPlay(item.chunk, item.mime);
+                    }
+                }
 
+                // 6. NOW, connect the WebSocket after all audio setup is complete.
+                AppLogger.info("Audio setup complete; connecting WS next");
+                await ensureConnected();
+                
+                if (modalityLabel.textContent === 'TEXT') {
+                    responseTextBox.textContent = '';
+                }
 
             } catch (error) {
-                console.error("Error starting audio input:", error);
+                AppLogger.error("Error starting audio input", error);
                 alert("Could not start audio recording: " + error.message);
             }
         }
@@ -794,17 +620,15 @@
             }
 
             // Signal end of audio stream turn (allows model to respond sooner)
-            if (webSocket && webSocket.readyState === WebSocket.OPEN && !document.getElementById('testModeCheckbox').checked) {
-                try { webSocket.send(JSON.stringify({ realtime_input: { audio_stream_end: true } })); console.log('Sent audio_stream_end'); } catch(e){ console.warn('Failed to send audio_stream_end', e); }
+            if (webSocket && webSocket.readyState === WebSocket.OPEN) {
+                try { webSocket.send(JSON.stringify({ realtime_input: { audio_stream_end: true } })); AppLogger.debug('Sent audio_stream_end'); } catch(e){ AppLogger.warn('Failed to send audio_stream_end', e); }
             }
         }
 
         function displayMessage(message) {
-           console.log(message);
+           AppLogger.debug('WS message', message?.slice ? message.slice(0,140) : message);
             addParagraphToDiv("chatLog", message);
         }
-
-    // (Removed legacy light status updater)
 
         function addParagraphToDiv(divId, text) {
            const newParagraph = document.createElement("p");
@@ -812,29 +636,6 @@
            const div = document.getElementById(divId);
            div.appendChild(newParagraph);
         }
-
-        startButton.addEventListener('click', () => { if(!currentMode){alert('Select a mode first.'); return;} startAudioInput(); });
-        stopButton.addEventListener('click', stopAudioInput);
-
-        // ------- Mode Handling -------
-        function setMode(newMode){
-            if (currentMode === newMode) return;
-            currentMode = newMode;
-            modeStatus.textContent = 'Mode: ' + (newMode==='dating' ? 'Dating Profile' : 'PDF Form');
-            if (newMode === 'dating') {
-                pdfUploadPanel.style.display='none';
-                pdfFormCard.style.display='none';
-                profileCard.style.display='block';
-                if (!document.getElementById('testModeCheckbox').checked) connect();
-            } else if (newMode === 'pdf') {
-                profileCard.style.display='none';
-                pdfUploadPanel.style.display='block';
-                pdfFormCard.style.display='none';
-            }
-        }
-        btnModeDating.addEventListener('click', ()=> setMode('dating'));
-        btnModePdf.addEventListener('click', ()=> setMode('pdf'));
-        btnCancelPdfMode.addEventListener('click', ()=> { setMode(null); modeStatus.textContent='Mode not chosen.'; });
 
         // ------- PDF Upload Flow -------
         pdfUploadForm.addEventListener('submit', async (e)=>{
@@ -863,33 +664,32 @@
                 if(meta.truncated_to_first_page){ extraNotes.push('Only first page processed.'); }
                 if(meta.field_cap_reached){ extraNotes.push('Field cap reached; some fields ignored.'); }
                 if(extraNotes.length){ pdfWarnings.textContent += (pdfWarnings.textContent? ' ':'') + extraNotes.join(' '); }
-                pdfUploadPanel.style.display='none';
+                
                 pdfFormCard.style.display='block';
+                voiceAssistantToggle.style.display = 'block';
                 refreshPdfFieldsUI();
-                // Now connect websocket in PDF mode with schema available for tool predeclaration
-                if(!document.getElementById('testModeCheckbox').checked) connect(); else modeStatus.textContent+=' (Test Mode)';
-                // No need to send pdf_schema message anymore - schema is in setup message
+                
             } catch(err){
-                console.error(err); pdfUploadStatus.textContent='Upload failed.';
+                AppLogger.error('Upload failed', err); pdfUploadStatus.textContent='Upload failed.';
             }
         });
-
-        // Remove the sendPdfSchemaIfReady function since schema is now sent in setup
 
         btnResetPdf.addEventListener('click', async ()=>{
             if(!pdfFormId){ return; }
             await fetch('/reset_form', { method:'POST' });
-            pdfSchema=null; pdfFormId=null; pdfState={}; pdfConfirmed={}; pdfFieldsOrder=[]; pdfDownloadReady=false; pdfCompletionBanner.textContent='';
-            pdfFormCard.style.display='none';
-            pdfUploadPanel.style.display='block';
-            modeStatus.textContent='PDF mode: form reset.';
+            resetPdfState();
         });
 
         btnDownloadPdf.addEventListener('click', async ()=>{
             if(!pdfDownloadReady && pdfFormId){ /* Still allow attempt once complete locally */ }
             if(!pdfFormId){ return; }
             const resp = await fetch('/download_filled/'+pdfFormId);
-            if(!resp.ok){ alert('Download failed (not ready?)'); return; }
+            if(!resp.ok){
+                let detail = '';
+                try { const j = await resp.json(); detail = j.message || j.error || ''; } catch(e) {}
+                alert('Download failed '+ (detail? ('- '+detail) : '(not ready?)'));
+                return;
+            }
             const blob = await resp.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -917,10 +717,10 @@
                     if(newVal.length > 500){
                         alert('Value truncated to 500 characters.');
                     }
-                    // send user_edit directly to websocket if live, else queue local
+                    // send user_edit directly to websocket if live
                     pdfState[name]=newVal.slice(0,500); pdfConfirmed[name]=true;
                     if(webSocket && webSocket.readyState===WebSocket.OPEN){
-                        webSocket.send(JSON.stringify({ user_edit: { field: name, value: newVal }}));
+                        sendUserEdit(name, newVal);
                     }
                     refreshPdfFieldsUI();
                 });
@@ -994,29 +794,8 @@
             }
         }
 
-        // Hook status poll start when PDF schema loads
-        const originalRefreshPdf = refreshPdfFieldsUI;
-        // Already calling refreshPdfFieldsUI in flow; ensure polling begins after schema is set
-        function refreshPdfFieldsUIWrapper(){ originalRefreshPdf(); if(currentMode==='pdf' && pdfFormId){ startPdfStatusPolling(); } }
-        refreshPdfFieldsUI = refreshPdfFieldsUIWrapper;
-
         function escapeHtml(str){
             return str.replace(/[&<>"']/g, c=> ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
-        }
-
-        // Hook into websocket open to send pdf schema
-        const originalConnect = connect;
-        connect = function(){
-            if (document.getElementById('testModeCheckbox').checked) {
-                console.log('Test mode skipping WS connect');
-                return;
-            }
-            console.log('connecting: ', URL);
-            webSocket = new WebSocket(URL);
-            webSocket.onclose = (event)=>{ console.log('websocket closed: ', event); };
-            webSocket.onerror = (event)=>{ console.log('websocket error: ', event); };
-            webSocket.onopen = (event)=>{ console.log('websocket open: ', event); sendInitialSetupMessage(); };
-            webSocket.onmessage = receiveMessage;
         }
 
 
