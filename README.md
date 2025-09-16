@@ -1,4 +1,6 @@
-# Voice Controlled PDF Form Filler (Unified Server)
+# Voice Controlled PDF Form Filler That's it—no second process required. If you previously ran `server.py` and `main.py` separately, the old two-process model is now **deprecated**. Note: `server.py` still contains shared components used by `app.py`, while `main.py` is kept only for reference.
+
+For engineering/backlog details (future improvements, internal priorities), see `NEXT_TASKS.md`. This README stays focused on human usage & concepts.ified Server)
 
 This project provides a browser-based, voice‑enabled workflow for filling AcroForm PDFs using the Gemini real‑time audio dialog API. The app now runs as a **single process** (`app.py`) hosting both:
 
@@ -226,7 +228,7 @@ Run `python server.py` + `python main.py` | Run `python app.py`
 Mode negotiation (`mode: dating | pdf_form`) | Removed (always PDF)
 Inter‑process pdf_sync HTTP POST | Direct in‑process sync (HTTP fallback retained for legacy multi‑process use)
 
-If you still have local scripts referencing `main.py`, update them to call `app.py`.
+If you still have local scripts referencing `main.py`, update them to call `app.py`. Note that `server.py` contains shared components still used by the unified architecture.
 
 ---
 

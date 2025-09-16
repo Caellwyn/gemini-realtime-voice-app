@@ -116,17 +116,51 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(response, status)
                 return
             
-            # Extract schema from successful response - need to re-extract for internal use
+            # Get form_id from the response (don't re-extract to avoid generating new UUID)
+            schema_dict = response['schema']
+            form_id = schema_dict['form_id']
+            print(f"[upload] Using form_id from response: {form_id}")
+            
+            # We still need a schema object for session creation, but we'll override its form_id
             result = PDFExtractor.extract_form_schema(file_bytes, filename)
             schema = result.schema
+            schema.form_id = form_id  # Use the same form_id as in the response
+            print(f"[upload] Set schema.form_id to match response: {schema.form_id}")
             
-            form_id = schema.form_id
             storage_manager.create(file_bytes, filename, form_id=form_id)
             schema.metadata['write_name_map'] = {f.name: f.original_name for f in schema.fields}
+            # Expose reverse name map for convenience (original->schema) when duplicates were disambiguated
+            try:
+                reverse_map = {}
+                for k, v in schema.metadata['write_name_map'].items():
+                    # Only first mapping for an original name kept (representative)
+                    reverse_map.setdefault(v, k)
+                schema.metadata['original_to_schema'] = reverse_map
+            except Exception:
+                pass
             
             # Create session using session manager
             session = session_manager.create_session(form_id, schema)
+            print(f"[upload] Created session with form_id: {form_id}")
+            print(f"[upload] Session count after creation: {len(session_manager._sessions)}")
             
+            # Add form_id explicitly to response for debugging
+            response['form_id'] = form_id
+            print(f"[upload] Returning form_id in response: {form_id}")
+            print(f"[upload] Schema form_id: {response['schema']['form_id']}")
+            print(f"[upload] Full response keys: {list(response.keys())}")
+            print(f"[upload] About to call schema.to_public_dict()")
+            public_dict = schema.to_public_dict()
+            print(f"[upload] public_dict form_id: {public_dict['form_id']}")
+            print(f"[upload] Are they equal? {form_id == public_dict['form_id']}")
+            
+            # Ensure response schema metadata reflects updated maps
+            try:
+                response['schema']['metadata']['write_name_map'] = schema.metadata.get('write_name_map', {})
+                response['schema']['metadata']['original_to_schema'] = schema.metadata.get('original_to_schema', {})
+            except Exception:
+                pass
+
             # Add replacement info to response
             response['replaced_previous'] = replaced_previous
             
@@ -140,30 +174,48 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': False,'error':'internal_error','message': str(e)}, 500)
 
     def handle_download_filled(self, form_id: str):
+        print(f"[download] Attempting download for form_id: {form_id}")
         session = session_manager.get_session(form_id)
         if not session:
-            try: print(f"[download] unknown form_id {form_id}")
-            except Exception: pass
+            print(f"[download] unknown form_id {form_id} - session not found in session manager")
+            # Debug: list all current sessions
+            try:
+                session_count = session_manager.get_session_count()
+                print(f"[download] Current session count: {session_count}")
+            except Exception as e:
+                print(f"[download] Error getting session count: {e}")
             self._send_json({'ok': False,'error':'unknown_form','message':'Unknown form_id'}, 404); return
         
+        print(f"[download] Session found for {form_id}")
         schema = session.schema
         state = session.state
-        if not all(state.values()):
+        
+        # Allow download if form is complete OR user has confirmed
+        is_complete = all(state.values())
+        is_confirmed = getattr(session, 'download_confirmed', False)
+        
+        print(f"[download] Form complete: {is_complete}, Download confirmed: {is_confirmed}")
+        
+        if not is_complete and not is_confirmed:
             try:
                 missing = [k for k,v in state.items() if not v]
-                print(f"[download] incomplete form {form_id}, missing={missing}")
+                print(f"[download] incomplete and unconfirmed form {form_id}, missing={missing}")
             except Exception: pass
-            self._send_json({'ok': False,'error':'incomplete','message':'Form not fully filled'}, 400); return
+            self._send_json({'ok': False,'error':'incomplete','message':'Form not fully filled and not confirmed'}, 400); return
         original_path = os.path.join(storage_manager.base_dir, form_id, 'original.pdf')
         if not os.path.exists(original_path):
             try: print(f"[download] original missing for {form_id} expected {original_path}")
             except Exception: pass
             self._send_json({'ok': False,'error':'missing_original','message':'Original PDF missing'}, 500); return
         with open(original_path,'rb') as f: original_bytes = f.read()
+        print(f"[download] Original PDF size: {len(original_bytes)} bytes")
         write_map = schema.metadata.get('write_name_map', {})
         translated_state = {write_map.get(k, k): v for k,v in state.items() if v is not None}
+        print(f"[download] State data: {len(state)} fields, {len(translated_state)} non-null")
+        print(f"[download] Sample state: {dict(list(translated_state.items())[:3])}")
         try:
             filled_bytes = fill_acroform(original_bytes, translated_state)
+            print(f"[download] Fill successful, filled PDF size: {len(filled_bytes)} bytes")
         except Exception as e:
             try: print(f"[download] fill_acroform failed {e}")
             except Exception: pass
@@ -172,6 +224,7 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Content-Type', 'application/pdf')
         self.send_header('Content-Disposition', f'attachment; filename="filled_{schema.metadata.get("original_filename","form")}"')
         self.send_header('Content-Length', str(len(filled_bytes)))
+        print(f"[download] Sending PDF with {len(filled_bytes)} bytes")
         self.end_headers(); self.wfile.write(filled_bytes)
 
     def handle_reset_form(self):
@@ -197,6 +250,9 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         if parsed.path.startswith('/download_filled/'):
             form_id = parsed.path.rsplit('/',1)[-1]
             return self.handle_download_filled(form_id)
+        if parsed.path.startswith('/original_pdf/'):
+            form_id = parsed.path.rsplit('/',1)[-1]
+            return self.handle_original_pdf(form_id)
         if parsed.path.startswith('/form_status/'):
             form_id = parsed.path.rsplit('/',1)[-1]
             return self.handle_form_status(form_id)
@@ -209,6 +265,10 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             data = json.loads(raw.decode('utf-8') or '{}')
             form_id = data.get('form_id')
             updates = data.get('updates', {})
+            
+            print(f"[update] Looking for session with form_id: {form_id}")
+            print(f"[update] Current session count: {len(session_manager._sessions)}")
+            print(f"[update] Available form_ids: {list(session_manager._sessions.keys())}")
             
             # Correct membership check: use get_session instead of relying on __contains__ (thread-safe path)
             if not form_id or session_manager.get_session(form_id) is None:
@@ -243,6 +303,27 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json({'ok': True,'remaining': status['remaining'],'complete': status['complete']})
         except Exception as e:
             self._send_json({'ok': False,'error':'status_failed','message': str(e)}, 500)
+
+    def handle_original_pdf(self, form_id: str):
+        try:
+            session = session_manager.get_session(form_id)
+            if not session:
+                self.send_error(404, 'Unknown form_id'); return
+            original_path = os.path.join(storage_manager.base_dir, form_id, 'original.pdf')
+            if not os.path.exists(original_path):
+                self.send_error(404, 'Original PDF missing'); return
+            with open(original_path, 'rb') as f:
+                data = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/pdf')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            try:
+                self.wfile.write(data)
+            except Exception:
+                pass
+        except Exception:
+            self.send_error(500, 'Failed to serve original PDF')
 
 def run():
     with socketserver.TCPServer(("", HTTP_PORT), NoCacheHandler) as httpd:

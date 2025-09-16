@@ -40,7 +40,6 @@ def _cleanup_form_sessions(interval: int = 180):  # every 3 minutes
                     try:
                         del FORM_SESSIONS[fid]
                         storage_manager.delete(fid)
-                        print(f"[session_state] Removed inactive form session {fid}")
                     except Exception:
                         pass
             except Exception:

@@ -105,8 +105,9 @@ class SessionConfig:
                 language_code="en-US",
             )
             config["speech_config"] = speech_cfg
-        except Exception as e:
-            print(f"Failed to build speech_config for voice '{voice_name}': {e}")
+        except Exception:
+            # Failed to build speech config, continue without it
+            pass
     
     @staticmethod
     def setup_vad_config(config: Dict[str, Any], enable_vad: bool):
@@ -125,8 +126,9 @@ class SessionConfig:
             config["realtime_input_config"] = types.RealtimeInputConfig(
                 automatic_activity_detection=aad
             )
-        except Exception as e:
-            print(f"Failed to build realtime_input_config: {e}")
+        except Exception:
+            # Failed to build realtime input config, continue without it
+            pass
 
 
 class PDFSyncManager:
@@ -158,14 +160,14 @@ class PDFSyncManager:
         if not self.form_id:
             return
         try:
-            # Lazy import to avoid circular import at module load time
-            from session_manager import get_session_manager  # noqa: WPS433
-            sm = get_session_manager()
-            if sm.get_session(self.form_id) is not None:
+            # Use the same session manager instance as HTTP server
+            import server
+            if server.session_manager.get_session(self.form_id) is not None:
                 self._direct_mode = True
-                self._session_manager = sm
-        except Exception as e:  # noqa: BLE001
-            print(f"[pdf_sync] direct mode detection failed: {e}")
+                self._session_manager = server.session_manager
+        except Exception:  # noqa: BLE001
+            # Direct mode detection failed, will use HTTP fallback
+            pass
 
     async def sync_updates(self, applied: Dict[str, Any]):
         """Apply field updates either directly or via HTTP fallback."""
@@ -183,8 +185,8 @@ class PDFSyncManager:
                     self._direct_mode = False
                 else:
                     return  # Direct path done
-            except Exception as e:  # noqa: BLE001
-                print(f"[pdf_sync] direct update failed, falling back to HTTP: {e}")
+            except Exception:  # noqa: BLE001
+                # Direct update failed, falling back to HTTP
                 self._direct_mode = False
 
         # HTTP fallback path
@@ -194,19 +196,16 @@ class PDFSyncManager:
                 await self._sync_with_aiohttp(payload)
             else:
                 await self._sync_with_urllib(payload)
-        except Exception as e:  # noqa: BLE001
-            print(f"[pdf_sync] failed: {e}")
+        except Exception:  # noqa: BLE001
+            # PDF sync failed silently
+            pass
 
     async def _sync_with_aiohttp(self, payload: Dict[str, Any]):
         """Sync using aiohttp if available."""
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3)) as session:
             async with session.post("http://localhost:8000/update_form_state", json=payload) as resp:
-                body = await resp.text()
-                if resp.status == 404:
-                    print(f"[pdf_sync] 404 unknown_form for form_id={payload.get('form_id')} (server not aware yet?)")
-                elif resp.status >= 400:
-                    snippet = (body or '').strip()[:120]
-                    print(f"[pdf_sync] HTTP {resp.status} error updating form: {snippet}")
+                # Silently handle HTTP errors without logging
+                pass
 
     async def _sync_with_urllib(self, payload: Dict[str, Any]):
         """Sync using urllib as fallback."""
@@ -224,8 +223,9 @@ class PDFSyncManager:
             try:
                 with urllib.request.urlopen(req, timeout=2) as r:
                     r.read()
-            except Exception as e:  # noqa: BLE001
-                print(f"[pdf_sync] failed (urllib): {e}")
+            except Exception:  # noqa: BLE001
+                # Sync failed silently
+                pass
 
         await loop.run_in_executor(None, _do_sync)
 
@@ -286,8 +286,9 @@ async def setup_session(session, form_manager: FormManager):
         
         # Small delay to ensure messages are processed
         await asyncio.sleep(0.1)
-    except Exception as e:
-        print(f"Failed to send system instruction: {e}")
+    except Exception:
+        # Failed to send system instruction, continue silently
+        pass
 
 
 async def handle_realtime_input(data: Dict[str, Any], session, form_manager: FormManager, pdf_sync: PDFSyncManager):
@@ -329,8 +330,9 @@ async def handle_user_edit(data: Dict[str, Any], session, form_manager: FormMana
         
         try:
             await session.send_realtime_input(text=msg)
-        except Exception as e:
-            print(f"Error sending user_edit delta to model: {e}")
+        except Exception:
+            # Error sending user edit delta, continue silently
+            pass
         
         # Sync this user edit
         await pdf_sync.sync_updates({field: form_manager.form_state.state[field]})
@@ -343,32 +345,40 @@ async def handle_form_confirmation(data: Dict[str, Any], session, form_manager: 
     if "confirm_form" not in data:
         return
     
-    if not form_manager.get_missing_fields():
-        # Final full sync before signaling readiness
-        try:
-            if form_manager.form_state:
-                filled_state = {k: v for k, v in form_manager.form_state.state.items() if v}
-                await pdf_sync.sync_updates(filled_state)
-        except Exception as e:
-            print(f"[pdf_sync] final sync error: {e}")
-        
-        try:
-            await session.send_realtime_input(text="User confirmed all fields. Session will conclude.")
-        except Exception:
-            pass
-        
-        # Notify UI to enable download
-        try:
-            form_id = getattr(form_manager.form_state, 'form_id', None)
-            await client_websocket.send(json.dumps({"download_ready": True, "form_id": form_id}))
-        except Exception as e:
-            print("Failed to send download_ready", e)
-        
-        await asyncio.sleep(0.4)
-        try:
-            await session.close()
-        except Exception:
-            pass
+    # Mark session as download confirmed regardless of completeness
+    if form_manager.form_state:
+        # Use the same session manager instance as the HTTP server
+        import server
+        form_id = form_manager.form_state.form_id
+        server.session_manager.confirm_session_download(form_id)
+    
+    # Final full sync before signaling readiness
+    try:
+        if form_manager.form_state:
+            filled_state = {k: v for k, v in form_manager.form_state.state.items() if v}
+            await pdf_sync.sync_updates(filled_state)
+    except Exception:
+        # Final sync error, continue silently
+        pass
+    
+    try:
+        await session.send_realtime_input(text="User confirmed all fields. Session will conclude.")
+    except Exception:
+        pass
+    
+    # Notify UI to enable download
+    try:
+        form_id = getattr(form_manager.form_state, 'form_id', None)
+        await client_websocket.send(json.dumps({"download_ready": True, "form_id": form_id}))
+    except Exception:
+        # Failed to send download_ready message
+        pass
+    
+    await asyncio.sleep(0.4)
+    try:
+        await session.close()
+    except Exception:
+        pass
 
 
 def create_websocket_server():

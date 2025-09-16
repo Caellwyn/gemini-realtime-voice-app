@@ -73,8 +73,8 @@ class ClientNotification:
         try:
             await client_websocket.send(self.to_json())
             return True
-        except Exception as e:
-            print(f"Failed to send client notification: {e}")
+        except Exception:
+            # Failed to send client notification
             return False
 
 

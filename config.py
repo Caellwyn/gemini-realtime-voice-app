@@ -60,11 +60,16 @@ INTERNAL_FIELD_PATTERNS = [
 PDF_TOOL_DECLARATIONS = [
     {
         "name": "update_pdf_fields",
-        "description": "Update one or more PDF form fields explicitly provided by the user.",
+        "description": (
+            "Update one or more PDF form fields explicitly provided by the user. "
+            "Field types: text (string), checkbox (boolean true/false), radio (one value from its allowed list), choice (one value from allowed list). "
+            "For checkbox you MUST send true or false (strings like 'true'/'false' acceptable). For radio/choice you MUST use an allowed value exactly as shown. "
+            "Batch multiple fields only if the user clearly supplied them together."
+        ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "updates": {"type": "STRING", "description": "JSON string mapping fieldName -> value. Example: '{\"FirstName\": \"Alice\", \"LastName\": \"Smith\"}'"}
+                "updates": {"type": "STRING", "description": "JSON string mapping fieldName -> value. Example: '{\"FirstName\": \"Alice\", \"Subscribed Check Box\": true}'"}
             }
         }
     },

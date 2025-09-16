@@ -3,8 +3,9 @@
 Run with:
     python app.py
 
-Replaces the previous two–process model (`server.py` + `main.py`). Those files remain for
-reference but are deprecated. All development should target this entry point.
+Replaces the previous two–process model (`server.py` + `main.py`). The old two-process 
+execution model is deprecated, but `server.py` still provides shared components.
+`main.py` is kept only for reference. All development should target this entry point.
 """
 import asyncio
 import json
@@ -25,7 +26,7 @@ from websocket_handler import (
 from tool_response_builder import ToolCall, ToolCallHandler
 from connection_manager import ConnectionManager, SessionContext
 from audio_handler import get_audio_handler
-from config import DEFAULT_MODEL, WEBSOCKET_PING_INTERVAL, WEBSOCKET_PING_TIMEOUT, HTTP_PORT
+from config import DEFAULT_MODEL, WEBSOCKET_PING_INTERVAL, WEBSOCKET_PING_TIMEOUT, HTTP_PORT, WEBSOCKET_PORT
 
 # Import the HTTP handler & storage/session singletons from existing server module
 import server as legacy_http
@@ -63,15 +64,14 @@ async def send_to_gemini(client_websocket: websockets.ServerProtocol, session, f
                     await handle_form_confirmation(data, session, form_manager, client_websocket, pdf_sync)
                     return
             except Exception as e:  # noqa: BLE001
-                print(f"Error processing client message: {e}")
-        print("Client connection closed (send)")
-    except websockets.exceptions.ConnectionClosed as e:  # noqa: PERF203
-        if getattr(e, 'code', None) == 1011:
-            print("Send connection closed due to keepalive timeout")
-        else:
-            print(f"Send websocket connection closed: {e}")
+                # Log client message processing errors silently
+                pass
+    except websockets.exceptions.ConnectionClosed:
+        # Connection closed normally
+        pass
     except Exception as e:  # noqa: BLE001
-        print(f"Error sending to Gemini: {e}")
+        # Log connection errors silently
+        pass
     finally:
         session_closed.set()
 
@@ -94,14 +94,14 @@ async def receive_from_gemini(session, client_websocket: websockets.ServerProtoc
                             elif hasattr(part, 'inline_data') and part.inline_data is not None:
                                 await audio_handler.process_gemini_audio_response(client_websocket, part)
     except websockets.exceptions.ConnectionClosedOK:  # type: ignore[attr-defined]
-        print("Client connection closed normally (receive)")
-    except websockets.exceptions.ConnectionClosed as e:  # noqa: PERF203
-        if getattr(e, 'code', None) == 1011:
-            print("Connection closed due to keepalive timeout")
-        else:
-            print(f"Websocket connection closed: {e}")
+        # Client connection closed normally 
+        pass
+    except websockets.exceptions.ConnectionClosed:
+        # Connection closed
+        pass
     except Exception as e:  # noqa: BLE001
-        print(f"Error receiving from Gemini: {e}")
+        # Log receive errors silently
+        pass
     finally:
         session_closed.set()
 
@@ -129,7 +129,6 @@ async def gemini_session_handler(client_websocket: websockets.ServerProtocol):
         pdf_sync = PDFSyncManager(pdf_form_id)
         start_ts = time.time()
         async with client.aio.live.connect(model=(model_override or DEFAULT_MODEL), config=config) as session:
-            print(f"Connected to Gemini API (latency {time.time()-start_ts:.2f}s)")
             await setup_session(session, form_manager)
             async def send_handler():
                 await send_to_gemini(client_websocket, session, form_manager, pdf_sync, session_context.session_closed)
@@ -141,7 +140,8 @@ async def gemini_session_handler(client_websocket: websockets.ServerProtocol):
             session_context.add_task(receive_task)
             await session_context.wait_for_completion()
     except Exception as e:  # noqa: BLE001
-        print(f"Error in Gemini session: {e}")
+        # Log session errors silently
+        pass
     finally:
         session_context.cancel_tasks()
 
@@ -170,21 +170,49 @@ def start_http_server():
 # Unified main entry
 ###################################################################################################
 async def run_websocket_server():
+    """Start the websocket server, trying a small range of ports if the base port is occupied.
+
+    This avoids hard crashes on Windows when a previous process instance didn't release the port yet.
+    Selected port is printed so frontend can attempt a list of candidates (frontend logic updated separately).
+    """
     connection_manager = ConnectionManager()
+
     async def session_wrapper(context: SessionContext):
         await gemini_session_handler(context.client_websocket)
+
     async def websocket_handler(ws, path=None):  # noqa: D401, ANN001
         client_addr = f"{ws.remote_address[0]}:{ws.remote_address[1]}"
         await connection_manager.handle_session(ws, client_addr, session_wrapper)
-    async with websockets.serve(
-        websocket_handler,
-        "localhost",
-        9082,
-        ping_interval=WEBSOCKET_PING_INTERVAL,
-        ping_timeout=WEBSOCKET_PING_TIMEOUT
-    ):
-        print("WebSocket server running on ws://localhost:9082")
-        await asyncio.Future()  # run forever
+
+    base = WEBSOCKET_PORT
+    chosen_server = None
+    chosen_port = None
+    last_error = None
+    for port in range(base, base + 10):  # try up to 10 successive ports
+        try:
+            chosen_server = await websockets.serve(
+                websocket_handler,
+                "localhost",
+                port,
+                ping_interval=WEBSOCKET_PING_INTERVAL,
+                ping_timeout=WEBSOCKET_PING_TIMEOUT
+            )
+            chosen_port = port
+            break
+        except OSError as e:  # noqa: BLE001
+            last_error = e
+            continue
+    if not chosen_server:
+        raise RuntimeError(f"Failed to bind any WebSocket port in range {base}-{base+9}: {last_error}")
+    print(f"WebSocket server running on ws://localhost:{chosen_port} (base requested {base})")
+    try:
+        await asyncio.Future()  # run forever until cancelled
+    finally:
+        chosen_server.close()
+        try:
+            await chosen_server.wait_closed()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def main():

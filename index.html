@@ -5,6 +5,25 @@
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://code.getmdl.io/1.3.0/material.indigo-pink.min.css">
+    <link rel="stylesheet" href="/pdfjs/pdf_viewer.css">
+    <!-- pdf.js ESM loader (single authoritative instance) -->
+    <script type="module">
+        import * as pdfjsLib from '/pdfjs/pdf.min.mjs';
+        import * as pdfjsViewer from '/pdfjs/pdf_viewer.mjs';
+        // Expose minimal globals for legacy inline script expectations
+        window.pdfjsLib = pdfjsLib;
+        window.pdfjsViewer = pdfjsViewer;
+        // Try module worker (preferred for ESM)
+        try {
+            const worker = new Worker('/pdfjs/pdf.worker.min.mjs', { type: 'module' });
+            if (pdfjsLib.GlobalWorkerOptions) {
+                pdfjsLib.GlobalWorkerOptions.workerPort = worker;
+            }
+        } catch(e){
+            // Fallback to direct workerSrc (some builds still accept this with .mjs path)
+            try { pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs'; } catch(_){ }
+        }
+    </script>
     <script defer src="https://code.getmdl.io/1.3.0/material.min.js"></script>
 
     <style>
@@ -14,6 +33,17 @@
             flex-direction: column;
             align-items: center;
         }
+        /* Explicit annotation layer (interactive form widgets) */
+        .annotationLayer { position:absolute; left:0; top:0; pointer-events:auto; }
+        .annotationLayer :is(input,textarea,select) { box-sizing:border-box; font-size:12px; }
+        .annotationLayer .textWidgetAnnotation input,
+        .annotationLayer .textWidgetAnnotation textarea,
+        .annotationLayer input[type="text"],
+        .annotationLayer textarea,
+        .annotationLayer select { padding:2px 4px; border:1px solid #c08bb1; background:rgba(255,255,255,.85); }
+        .annotationLayer input[type="checkbox"],
+        .annotationLayer input[type="radio"] { transform:scale(1.05); }
+        .annotationLayer .buttonWidgetAnnotation.pushButton { cursor:pointer; }
 
         .button-group {
             margin-bottom: 20px;
@@ -169,17 +199,19 @@
                             </label>
                         </div>
                     </div>
-                    <!-- Generic PDF Form Collector (hidden until PDF mode active + schema loaded) -->
+                    <!-- Inline PDF Viewer Card -->
                     <div class="profile-card" id="pdfFormCard" style="display:none; margin-top: 20px;">
-                        <div style="font-weight:700; font-size:18px; margin-bottom:4px;">PDF Form Field Collector</div>
-                        <div class="small-note" id="pdfFormMetaNote">Upload a PDF with AcroForm fields. All fields required.</div>
+                        <div style="font-weight:700; font-size:18px; margin-bottom:4px;">PDF Form</div>
+                        <div class="small-note" id="pdfFormMetaNote">Fields will fill automatically as you (or the AI) provide values.</div>
                         <div id="pdfFieldSummary" class="profile-status" style="margin-top:4px;"></div>
-                        <div id="pdfFieldsContainer" class="profile-grid" style="margin-top:10px;"></div>
-                        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 4px 0;">
                             <button class="pill-btn danger" id="btnResetPdf" title="Reset PDF session">Reset</button>
                             <button class="pill-btn" id="btnDownloadPdf" style="display:none;">Download Filled PDF</button>
                         </div>
-                        <div id="pdfCompletionBanner" class="profile-status" style="margin-top:10px;"></div>
+                        <div id="pdfCompletionBanner" class="profile-status" style="margin-top:6px;"></div>
+                        <div id="pdfViewerContainer" style="position:relative; margin-top:12px; border:1px solid #e0b4c9; border-radius:8px; overflow:auto; max-height:900px; background:#fff;">
+                            <div id="pdfPages"></div>
+                        </div>
                     </div>
 
                     <!-- Text Output -->
@@ -198,6 +230,8 @@
             </div>
         </main>
     </div>
+
+    <!-- (Removed duplicate pdf.js module script; single loader kept in <head>) -->
 
     <script defer>
         // -------- Lightweight Client Logger ---------
@@ -240,7 +274,10 @@
             if(levelSel){ levelSel.addEventListener('change', ()=> AppLogger.setLevel(levelSel.value)); }
             if(audioChk){ audioChk.addEventListener('change', ()=> AppLogger.setVerboseAudio(audioChk.checked)); }
         });
-        const URL = "ws://localhost:9082";
+    // WebSocket dynamic port list (backend now may shift if base port busy)
+    const WS_BASE_PORT = 9082;
+    const WS_CANDIDATE_PORTS = Array.from({length:10}, (_,i)=> WS_BASE_PORT + i);
+    let wsChosenPort = null;
     const assistantSwitch = document.getElementById('assistantSwitch');
     const voiceAssistantToggle = document.getElementById('voice-assistant-toggle');
 
@@ -251,12 +288,13 @@
     const pdfUploadStatus = document.getElementById('pdfUploadStatus');
     const pdfWarnings = document.getElementById('pdfWarnings');
     const pdfFormCard = document.getElementById('pdfFormCard');
-    const pdfFieldsContainer = document.getElementById('pdfFieldsContainer');
     const pdfFieldSummary = document.getElementById('pdfFieldSummary');
     const pdfFormMetaNote = document.getElementById('pdfFormMetaNote');
     const btnResetPdf = document.getElementById('btnResetPdf');
     const btnDownloadPdf = document.getElementById('btnDownloadPdf');
     const pdfCompletionBanner = document.getElementById('pdfCompletionBanner');
+    const pdfViewerContainer = document.getElementById('pdfViewerContainer');
+    const pdfPagesEl = document.getElementById('pdfPages');
 
     let webSocket = null;
         let audioContext = null;
@@ -278,6 +316,10 @@
     let pdfAllConfirmed = false;
     let pdfDownloadReady = false;
     let pdfFieldsOrder = [];
+    let pdfOriginalToSchema = {}; // original name -> schema unique name
+    let pdfSchemaToOriginal = {}; // schema unique -> original
+    let pdfJsDoc = null;
+    const pdfFieldDomMap = new Map(); // original_name -> element(s)
 
     // Removed profile state variables
 
@@ -292,9 +334,7 @@
         pdfFormCard.style.display = 'none';
         pdfUploadPanel.style.display = 'block';
         voiceAssistantToggle.style.display = 'none';
-        if (assistantSwitch.checked) {
-            assistantSwitch.parentElement.MaterialSwitch.off();
-        }
+        try { if(webSocket && webSocket.readyState===WebSocket.OPEN){ webSocket.close(); } } catch(e){}
     }
 
     function sendUserEdit(field, value) {
@@ -304,9 +344,8 @@
     }
 
     window.addEventListener("load", async () => {
-        // Update component state for MDL
-        componentHandler.upgradeDom();
-
+        // MDL upgrade
+        if (window.componentHandler) { componentHandler.upgradeDom(); }
         assistantSwitch.addEventListener('change', (event) => {
             if (event.currentTarget.checked) {
                 AppLogger.info("Voice assistant enabled. Connecting WebSocket.");
@@ -314,66 +353,54 @@
             } else {
                 AppLogger.info("Voice assistant disabled. Disconnecting WebSocket.");
                 stopAudioInput();
-                if (webSocket) {
-                    webSocket.close();
-                    webSocket = null;
-                }
+                if (webSocket) { try { webSocket.close(); } catch(e){} webSocket = null; }
             }
         });
     });
 
-    function connect() {
-        AppLogger.info("WS connecting", URL);
-
-        webSocket = new WebSocket(URL);
-
-        webSocket.onclose = (event) => {
-            AppLogger.info("WS closed", event.code, event.reason);
-            if (assistantSwitch.checked) {
-                alert("Connection closed");
-                assistantSwitch.parentElement.MaterialSwitch.off();
+    async function connect() {
+        if(webSocket && (webSocket.readyState===WebSocket.OPEN || webSocket.readyState===WebSocket.CONNECTING)) return;
+        for(const port of WS_CANDIDATE_PORTS){
+            try {
+                await new Promise((resolve, reject)=>{
+                    const url = `ws://localhost:${port}`;
+                    AppLogger.info('WS attempting', url);
+                    const ws = new WebSocket(url);
+                    let settled = false;
+                    const timer = setTimeout(()=>{ if(!settled){ try { ws.close(); } catch(_){} reject(new Error('timeout')); }}, 4000);
+                    ws.onopen = () => { settled = true; clearTimeout(timer); webSocket = ws; wsChosenPort = port; resolve(); };
+                    ws.onerror = (e) => { if(!settled){ settled=true; clearTimeout(timer); reject(e);} };
+                    ws.onclose = (e) => { if(!settled){ settled=true; clearTimeout(timer); reject(e);} AppLogger.info('WS closed', e.code, e.reason); };
+                    ws.onmessage = receiveMessage;
+                });
+                AppLogger.info('WS connected on port', wsChosenPort);
+                sendInitialSetupMessage();
+                return;
+            } catch(e){
+                AppLogger.warn('WS port failed', port, e?.message||e);
             }
-        };
-
-        webSocket.onerror = (event) => {
-            AppLogger.warn("WS error", event);
-        };
-
-        webSocket.onopen = (event) => {
-            AppLogger.info("WS open");
-            sendInitialSetupMessage();
-        };
-
-        webSocket.onmessage = receiveMessage;
+        }
+        AppLogger.error('All WS candidate ports failed. Backend may not be running.');
     }
 
-
-        function sendInitialSetupMessage() {
-            AppLogger.debug("Sending setup message");
-            const model = document.getElementById('modelSelect').value;
-            const voiceName = document.getElementById('voiceSelect').value;
-            const enableVad = document.getElementById('vadCheckbox').checked;
-
-            // Only AUDIO modality for native audio dialog model
-            const responseModalities = ["AUDIO"]; modalityLabel.textContent = 'AUDIO';
-
-            const setup_client_message = {
-                setup: {
-                    generation_config: { response_modalities: responseModalities, temperature: 0.9 },
-                    model: model,
-                    voice_name: voiceName,
-                    enable_vad: enableVad
-                }
-            };
-
-            // For PDF mode, include field names in setup so tools can be predeclared
-            if (pdfSchema && pdfFieldsOrder.length > 0) {
-                setup_client_message.setup.pdf_field_names = pdfFieldsOrder;
-                setup_client_message.setup.pdf_form_id = pdfFormId;
+    function sendInitialSetupMessage() {
+        if(!pdfSchema || !pdfFieldsOrder.length){ AppLogger.debug('Setup deferred until PDF loaded'); }
+        const model = document.getElementById('modelSelect').value;
+        const voiceName = document.getElementById('voiceSelect').value;
+        const enableVad = document.getElementById('vadCheckbox').checked;
+        const responseModalities = ["AUDIO"]; modalityLabel.textContent = 'AUDIO';
+        const setup_client_message = {
+            setup: {
+                generation_config: { response_modalities: responseModalities, temperature: 0.9 },
+                model: model,
+                voice_name: voiceName,
+                enable_vad: enableVad,
+                pdf_field_names: pdfFieldsOrder,
+                pdf_form_id: pdfFormId
             }
-
-            webSocket.send(JSON.stringify(setup_client_message));
-        }
+        };
+        try { webSocket.send(JSON.stringify(setup_client_message)); } catch(e){ AppLogger.warn('Failed to send setup', e); }
+    }
 
 
         function sendVoiceMessage(pcmData) {
@@ -420,15 +447,14 @@
 
             // PDF form tool responses
             if (messageData.form_tool_response) {
-                const { updated, remaining } = messageData.form_tool_response;
-                Object.entries(updated || {}).forEach(([k,v]) => {
-                    pdfState[k] = v; pdfConfirmed[k] = true;
-                });
-                refreshPdfFieldsUI();
+                const { updated } = messageData.form_tool_response;
+                Object.entries(updated || {}).forEach(([k,v]) => { pdfState[k] = v; pdfConfirmed[k] = true; });
+                refreshPdfFieldSummary();
+                syncPdfJsDom();
             }
             if (messageData.form_state) {
-                // Could update summary if needed
-                refreshPdfFieldsUI();
+                refreshPdfFieldSummary();
+                syncPdfJsDom();
             }
             if (messageData.download_ready) {
                 pdfDownloadReady = true;
@@ -656,6 +682,11 @@
                 pdfUploadStatus.textContent = statusLine;
                 if(data.warnings){ pdfWarnings.textContent = 'Warnings: '+ data.warnings.join(', '); }
                 pdfSchema = data.schema; pdfFormId = data.schema.form_id;
+                pdfSchemaToOriginal = (pdfSchema.metadata && pdfSchema.metadata.write_name_map) || {};
+                pdfOriginalToSchema = (pdfSchema.metadata && pdfSchema.metadata.original_to_schema) || {};
+                console.log('[FRONTEND] Upload response form_id:', data.schema.form_id);
+                console.log('[FRONTEND] Set pdfFormId to:', pdfFormId);
+                // Use geometric ordering from backend (already sorted) but keep explicit copy
                 pdfFieldsOrder = data.schema.fields.map(f=>f.name);
                 pdfState = {}; pdfConfirmed = {}; pdfFieldsOrder.forEach(n=>{ pdfState[n]=null; pdfConfirmed[n]=false; });
                 // Extra metadata warnings
@@ -667,7 +698,12 @@
                 
                 pdfFormCard.style.display='block';
                 voiceAssistantToggle.style.display = 'block';
-                refreshPdfFieldsUI();
+                // Hide legacy stacked UI elements (deprecated) and render inline PDF
+                // Legacy stacked field container removed; inline pdf.js form used instead.
+                refreshPdfFieldSummary();
+                await renderPdfInline();
+                AppLogger.debug('renderPdfInline invoked after upload');
+                syncPdfJsDom();
                 
             } catch(err){
                 AppLogger.error('Upload failed', err); pdfUploadStatus.textContent='Upload failed.';
@@ -683,7 +719,9 @@
         btnDownloadPdf.addEventListener('click', async ()=>{
             if(!pdfDownloadReady && pdfFormId){ /* Still allow attempt once complete locally */ }
             if(!pdfFormId){ return; }
+            console.log('[FRONTEND] Starting download for form_id:', pdfFormId);
             const resp = await fetch('/download_filled/'+pdfFormId);
+            console.log('[FRONTEND] Download response status:', resp.status, resp.statusText);
             if(!resp.ok){
                 let detail = '';
                 try { const j = await resp.json(); detail = j.message || j.error || ''; } catch(e) {}
@@ -691,44 +729,164 @@
                 return;
             }
             const blob = await resp.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'filled_'+ (pdfSchema?.metadata?.original_filename || 'form') ;
-            document.body.appendChild(a); a.click(); a.remove();
-            setTimeout(()=>URL.revokeObjectURL(url), 3000);
+            console.log('[FRONTEND] Created blob, size:', blob.size, 'type:', blob.type);
+            
+            // Try URL.createObjectURL first
+            const urlAPI = window.URL || window.webkitURL;
+            if (urlAPI && urlAPI.createObjectURL) {
+                console.log('[FRONTEND] Using URL.createObjectURL method');
+                // (Removed duplicated inline PDF helpers – using unified versions below)
+                const url = urlAPI.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; 
+                a.download = 'filled_'+ (pdfSchema?.metadata?.original_filename || 'form.pdf') ;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(()=> urlAPI.revokeObjectURL(url), 3000);
+            } else {
+                // Fallback data URL method
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const a = document.createElement('a');
+                    a.href = e.target.result;
+                    a.download = 'filled_'+ (pdfSchema?.metadata?.original_filename || 'form.pdf');
+                    document.body.appendChild(a); a.click(); a.remove();
+                };
+                reader.readAsDataURL(blob);
+            }
         });
 
-        function refreshPdfFieldsUI(){
-            if(!pdfSchema){ return; }
-            pdfFieldsContainer.innerHTML='';
-            let missingCount=0; let total=pdfFieldsOrder.length;
-            pdfFieldsOrder.forEach(name => {
-                const fieldMeta = pdfSchema.fields.find(f=>f.name===name) || { display_name: name };
-                const val = pdfState[name];
-                if(!val) missingCount++;
-                const wrap = document.createElement('div');
-                wrap.className = 'field-block'+(val?'' : ' missing');
-                const inputId = 'pdf_field_'+name;
-                wrap.innerHTML = `<label for="${inputId}">${fieldMeta.display_name}</label><input aria-label="${fieldMeta.display_name}" id="${inputId}" type="text" value="${val?escapeHtml(val):''}" />`;
-                const input = wrap.querySelector('input');
-                input.addEventListener('change', ()=>{
-                    const newVal = input.value.trim();
-                    if(!newVal){ pdfState[name]=null; pdfConfirmed[name]=false; refreshPdfFieldsUI(); return; }
-                    if(newVal.length > 500){
-                        alert('Value truncated to 500 characters.');
-                    }
-                    // send user_edit directly to websocket if live
-                    pdfState[name]=newVal.slice(0,500); pdfConfirmed[name]=true;
-                    if(webSocket && webSocket.readyState===WebSocket.OPEN){
-                        sendUserEdit(name, newVal);
-                    }
-                    refreshPdfFieldsUI();
+        // ---- Inline PDF utility functions (moved out of download handler) ----
+        function refreshPdfFieldSummary(){
+            if(!pdfSchema){ pdfFieldSummary.textContent=''; return; }
+            let total = pdfFieldsOrder.length;
+            // Consider a field filled if it has a non-empty string, a finite number, true boolean, or non-null object/array
+            let filled = Object.values(pdfState).filter(v=>{
+                if(v === null || v === undefined) return false;
+                if(typeof v === 'string') return v.trim().length>0;
+                if(typeof v === 'boolean') return v === true; // only true counts for checkboxes
+                if(typeof v === 'number') return true;
+                return true; // objects (e.g., future structured) count
+            }).length;
+            pdfFieldSummary.textContent = `${filled} of ${total} fields filled.`;
+        }
+
+        async function renderPdfInline(){
+            if(!pdfFormId){ AppLogger.warn('renderPdfInline: missing formId'); return; }
+            const url = `/original_pdf/${pdfFormId}`;
+            AppLogger.info('Rendering PDF inline', url);
+            try {
+                const probe = await fetch(url, { method:'GET' });
+                if(!probe.ok){ AppLogger.error('original_pdf fetch failed status', probe.status); return; }
+                const loadingTask = window.pdfjsLib.getDocument({ url });
+                pdfJsDoc = await loadingTask.promise;
+                pdfPagesEl.innerHTML='';
+
+                // Iterate pages; render canvas + annotation layer with interactive forms
+                for(let pageNum = 1; pageNum <= pdfJsDoc.numPages; pageNum++){
+                    const pdfPage = await pdfJsDoc.getPage(pageNum);
+                    const viewport = pdfPage.getViewport({ scale: 1.15 });
+                    const pageWrapper = document.createElement('div');
+                    pageWrapper.className='pdf-page';
+                    pageWrapper.style.position='relative';
+                    pageWrapper.style.width = viewport.width + 'px';
+                    pageWrapper.style.height = viewport.height + 'px';
+                    pageWrapper.style.margin='0 auto 24px auto';
+
+                    // Canvas layer
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = viewport.width; canvas.height = viewport.height;
+                    canvas.style.display='block';
+                    pageWrapper.appendChild(canvas);
+                    pdfPagesEl.appendChild(pageWrapper);
+                    await pdfPage.render({ canvasContext: ctx, viewport }).promise;
+
+                    // Annotation layer container
+                    const annLayerDiv = document.createElement('div');
+                    annLayerDiv.className='annotationLayer';
+                    annLayerDiv.style.width = canvas.style.width || (viewport.width + 'px');
+                    annLayerDiv.style.height = canvas.style.height || (viewport.height + 'px');
+                    pageWrapper.appendChild(annLayerDiv);
+
+                    // Render interactive forms using available API
+                    try {
+                        const annotations = await pdfPage.getAnnotations({ intent:'display' });
+                        const pdfjsLib = window.pdfjsLib;
+                        const params = {
+                            annotations,
+                            div: annLayerDiv,
+                            page: pdfPage,
+                            viewport,
+                            renderInteractiveForms: true,
+                            linkService: { getDestinationHash:()=>'', navigateTo:()=>{} },
+                            annotationStorage: (pdfjsLib.AnnotationStorage ? new pdfjsLib.AnnotationStorage() : undefined),
+                            enableScripting: false
+                        };
+                        if(pdfjsLib.AnnotationLayer && pdfjsLib.AnnotationLayer.render){
+                            pdfjsLib.AnnotationLayer.render(params);
+                        } else if(pdfjsLib.renderAnnotationLayer){
+                            pdfjsLib.renderAnnotationLayer(params);
+                        } else {
+                            // Fallback: naive widget creation
+                            annotations.forEach(ann=>{
+                                if(!ann || !ann.fieldName || !ann.rect || (ann.subtype||'').toLowerCase()!=='widget') return;
+                                let el;
+                                if(ann.checkBox){ el=document.createElement('input'); el.type='checkbox'; }
+                                else if(ann.radioButton){ el=document.createElement('input'); el.type='radio'; el.value=ann.exportValue||'On'; el.name=ann.fieldName; }
+                                else { el=document.createElement('input'); el.type='text'; el.value=ann.fieldValue||''; }
+                                el.name = ann.fieldName;
+                                let r = ann.rect; try { if(pdfjsLib.Util && pdfjsLib.Util.normalizeRect) r = pdfjsLib.Util.normalizeRect(r); } catch(_){ }
+                                let vrect = r; try { vrect = viewport.convertToViewportRectangle(r); } catch(_){ }
+                                const [x1,y1,x2,y2] = vrect;
+                                const w = Math.abs(x2-x1); const h=Math.abs(y2-y1);
+                                el.style.position='absolute';
+                                el.style.left = Math.min(x1,x2)+'px';
+                                el.style.top = Math.min(y1,y2)+'px';
+                                el.style.width = (w>4?w:40)+'px';
+                                el.style.height = (h>8?h:16)+'px';
+                                el.style.fontSize='11px';
+                                annLayerDiv.appendChild(el);
+                            });
+                        }
+                    } catch(e){ AppLogger.warn('Annotation layer failed page '+pageNum, e); }
+                }
+
+                collectPdfJsFormFields(pdfPagesEl);
+                AppLogger.info('PDF rendered; collected form elements', pdfFieldDomMap.size);
+                pdfFormCard.style.display='block';
+                voiceAssistantToggle.style.display='block';
+                connect();
+            } catch(err){
+                AppLogger.error('renderPdfInline failed', err);
+            }
+        }
+
+        function collectPdfJsFormFields(container){
+            pdfFieldDomMap.clear();
+            const elements = container.querySelectorAll('input,select,textarea');
+            elements.forEach(el => {
+                const name = el.name || el.getAttribute('name') || el.getAttribute('data-name');
+                if(!name) return;
+                if(!pdfFieldDomMap.has(name)) pdfFieldDomMap.set(name, []);
+                pdfFieldDomMap.get(name).push(el);
+                el.addEventListener('change', () => {
+                    const schemaName = pdfOriginalToSchema[name] || name;
+                    let value;
+                    if(el.type === 'checkbox') value = el.checked; else if(el.type === 'radio'){ if(el.checked) value=el.value; else return; } else value = el.value;
+                    pdfState[schemaName] = value; refreshPdfFieldSummary();
+                    if(webSocket && webSocket.readyState===WebSocket.OPEN){ sendUserEdit(schemaName, value); }
                 });
-                pdfFieldsContainer.appendChild(wrap);
             });
-            pdfFieldSummary.textContent = `${total-missingCount} of ${total} fields filled.`;
-            // Hide any previous confirmation prompt if fields became missing again
-            if (missingCount > 0) removePdfConfirmationPrompt();
+        }
+
+        function syncPdfJsDom(){
+            pdfFieldDomMap.forEach((els, originalName) => {
+                const schemaName = pdfOriginalToSchema[originalName] || originalName;
+                const val = pdfState[schemaName];
+                els.forEach(el => {
+                    if(el.type === 'checkbox') el.checked = !!val; else if(el.type === 'radio') el.checked = (el.value===val); else if(val!==undefined && val!==null) el.value = val;
+                });
+            });
         }
 
         function showPdfConfirmationPrompt(){

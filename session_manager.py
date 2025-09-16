@@ -20,6 +20,7 @@ class FormSession:
     confirmed: Dict[str, bool]
     last_activity: float
     completed: bool = False
+    download_confirmed: bool = False
     created_at: float = None
     
     def __post_init__(self):
@@ -81,6 +82,11 @@ class FormSession:
             self.completed = self.is_complete()
         
         return updated
+    
+    def confirm_download(self):
+        """Mark this session as confirmed for download."""
+        self.download_confirmed = True
+        self.touch()
 
 
 class SessionManager:
@@ -119,8 +125,8 @@ class SessionManager:
             try:
                 self.cleanup_expired_sessions()
                 time.sleep(SESSION_CLEANUP_INTERVAL)
-            except Exception as e:
-                print(f"[SessionManager] Cleanup error: {e}")
+            except Exception:
+                # Cleanup error, continue silently
                 time.sleep(SESSION_CLEANUP_INTERVAL)
     
     def create_session(self, form_id: str, schema: FormSchema) -> FormSession:
@@ -161,8 +167,9 @@ class SessionManager:
             if self._storage_manager:
                 try:
                     self._storage_manager.delete(form_id)
-                except Exception as e:
-                    print(f"[SessionManager] Storage deletion error for {form_id}: {e}")
+                except Exception:
+                    # Storage deletion error, continue silently
+                    pass
             
             return True
     
@@ -174,6 +181,16 @@ class SessionManager:
                 return None
             
             return session.update_multiple_fields(updates)
+    
+    def confirm_session_download(self, form_id: str) -> bool:
+        """Mark a session as confirmed for download."""
+        with self._lock:
+            session = self.get_session(form_id)
+            if not session:
+                return False
+            
+            session.confirm_download()
+            return True
     
     def get_session_status(self, form_id: str) -> Optional[Dict[str, Any]]:
         """Get session status information."""
@@ -203,7 +220,6 @@ class SessionManager:
             for form_id in expired_ids:
                 if self.delete_session(form_id):
                     cleaned_count += 1
-                    print(f"[SessionManager] Removed expired session {form_id}")
         
         return cleaned_count
     

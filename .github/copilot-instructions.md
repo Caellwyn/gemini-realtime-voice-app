@@ -20,7 +20,9 @@ Single-process voice-driven AcroForm filler.
 | Sync (direct + fallback) | `websocket_handler.PDFSyncManager` |
 | Frontend UI | `index.html` |
 
-Legacy (`main.py`, `server.py`) kept only for historical reference.
+**Shared Components:** `server.py` provides shared HTTP handlers (`NoCacheHandler`) and the global `session_manager` instance used by both HTTP and WebSocket components.
+
+**Legacy:** `main.py` kept only for historical reference.
 
 ## Tools Exposed to Model
 1. `update_pdf_fields` (args.updates: { field: value, ... })

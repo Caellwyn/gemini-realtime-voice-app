@@ -94,7 +94,63 @@ def extract_acroform(pdf_bytes: bytes, original_filename: str) -> FormSchema:
                 name_counts[base] = 1
             # Field type may reside on parent if not directly present
             ft = annot.get("/FT") or (annot.get("/Parent").get("/FT") if annot.get("/Parent") else None)
-            field_type = ft if isinstance(ft, str) else getattr(ft, "name", "Unknown")
+            raw_type = ft if isinstance(ft, str) else getattr(ft, "name", "Unknown")
+            kind = "text"
+            allowed_values = None
+            group_name = None
+
+            try:
+                if raw_type == "/Btn":  # button family: checkbox or radio
+                    # Radio buttons have the radio flag (bit 15) set in /Ff (value 1<<15)
+                    flags = annot.get("/Ff") or (annot.get("/Parent").get("/Ff") if annot.get("/Parent") else 0)
+                    if isinstance(flags, int) and (flags & (1 << 15)):
+                        kind = "radio"
+                        # group name heuristic: parent /T or base original name
+                        parent = annot.get("/Parent")
+                        group_name = parent.get("/T") if parent and parent.get("/T") else original_name
+                        # Allowed states from appearances (/AP /N keys excluding /Off)
+                        ap = annot.get("/AP") or (parent.get("/AP") if parent else None)
+                        if ap and ap.get("/N"):
+                            n_dict = ap.get("/N")
+                            try:
+                                allowed_values = [k for k in n_dict.keys() if k != "/Off"] or None
+                                if allowed_values:
+                                    allowed_values = [v.lstrip("/") for v in allowed_values]
+                            except Exception:
+                                allowed_values = None
+                    else:
+                        kind = "checkbox"
+                        # Determine on-state (first non Off appearance)
+                        ap = annot.get("/AP")
+                        on_state = None
+                        if ap and ap.get("/N"):
+                            try:
+                                for k in ap.get("/N").keys():
+                                    if k != "/Off":
+                                        on_state = k.lstrip("/")
+                                        break
+                            except Exception:  # pragma: no cover
+                                pass
+                        if on_state:
+                            allowed_values = ["true", "false"]  # logical interface
+                elif raw_type == "/Ch":  # choice / combo / list
+                    kind = "choice"
+                    opt = annot.get("/Opt") or (annot.get("/Parent").get("/Opt") if annot.get("/Parent") else None)
+                    if opt:
+                        try:
+                            extracted_opts = []
+                            for o in opt:
+                                if isinstance(o, str):
+                                    extracted_opts.append(o)
+                                else:
+                                    name = getattr(o, "name", None)
+                                    if name:
+                                        extracted_opts.append(name)
+                            allowed_values = extracted_opts or None
+                        except Exception:
+                            allowed_values = None
+            except Exception:  # classification failures fallback to defaults
+                pass
             rect = None
             rect_array = annot.get("/Rect")
             if rect_array:
@@ -107,8 +163,11 @@ def extract_acroform(pdf_bytes: bytes, original_filename: str) -> FormSchema:
                 display_name=original_name,
                 page=0,
                 rect=rect,
-                field_type=field_type or "Unknown",
-                original_name=original_name
+                raw_field_type=raw_type or "Unknown",
+                original_name=original_name,
+                kind=kind,
+                allowed_values=allowed_values,
+                group_name=group_name,
             ))
             limit += 1
         except Exception:
@@ -134,7 +193,35 @@ def extract_acroform(pdf_bytes: bytes, original_filename: str) -> FormSchema:
                 else:
                     name_counts[base] = 1
                 ft = f.get("/FT")
-                field_type = ft if isinstance(ft, str) else getattr(ft, "name", "Unknown")
+                raw_type = ft if isinstance(ft, str) else getattr(ft, "name", "Unknown")
+                kind = "text"
+                allowed_values = None
+                group_name = None
+                try:
+                    if raw_type == "/Btn":
+                        flags = f.get("/Ff")
+                        if isinstance(flags, int) and (flags & (1 << 15)):
+                            kind = "radio"
+                        else:
+                            kind = "checkbox"
+                    elif raw_type == "/Ch":
+                        kind = "choice"
+                        opt = f.get("/Opt")
+                        if opt:
+                            try:
+                                extracted_opts = []
+                                for o in opt:
+                                    if isinstance(o, str):
+                                        extracted_opts.append(o)
+                                    else:
+                                        name = getattr(o, "name", None)
+                                        if name:
+                                            extracted_opts.append(name)
+                                allowed_values = extracted_opts or None
+                            except Exception:
+                                allowed_values = None
+                except Exception:
+                    pass
                 rect = None
                 try:
                     widget = f.get("/Kids")[0] if f.get("/Kids") else f
@@ -148,8 +235,11 @@ def extract_acroform(pdf_bytes: bytes, original_filename: str) -> FormSchema:
                     display_name=original_name,
                     page=0,
                     rect=rect,
-                    field_type=field_type or "Unknown",
-                    original_name=original_name
+                    raw_field_type=raw_type or "Unknown",
+                    original_name=original_name,
+                    kind=kind,
+                    allowed_values=allowed_values,
+                    group_name=group_name,
                 ))
             except Exception:
                 continue

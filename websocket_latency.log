@@ -210,3 +210,109 @@ mode
 2025-09-15 00:29:05,551 - INFO - New WebSocket connection from ::1:65254
 2025-09-15 00:30:28,386 - INFO - Session ended (client: ::1:65254)
 2025-09-15 00:30:28,386 - INFO - Session ended (client: ::1:65254)
+2025-09-15 15:36:11,819 - INFO - New WebSocket connection from ::1:55503
+2025-09-15 15:37:06,543 - INFO - Session ended (client: ::1:55503)
+2025-09-15 15:37:06,543 - INFO - Session ended (client: ::1:55503)
+2025-09-15 15:40:17,130 - INFO - New WebSocket connection from ::1:57023
+2025-09-15 15:41:40,764 - INFO - Session ended (client: ::1:57023)
+2025-09-15 15:41:40,764 - INFO - Session ended (client: ::1:57023)
+2025-09-15 15:52:13,951 - INFO - New WebSocket connection from ::1:62705
+2025-09-15 15:53:05,657 - INFO - Session ended (client: ::1:62705)
+2025-09-15 15:53:05,657 - INFO - Session ended (client: ::1:62705)
+2025-09-15 15:56:16,957 - INFO - New WebSocket connection from ::1:54140
+2025-09-15 15:57:01,747 - INFO - Session ended (client: ::1:54140)
+2025-09-15 15:57:01,747 - INFO - Session ended (client: ::1:54140)
+2025-09-15 16:01:23,352 - INFO - New WebSocket connection from ::1:63541
+2025-09-15 16:01:50,744 - INFO - Session ended (client: ::1:63541)
+2025-09-15 16:01:50,744 - INFO - Session ended (client: ::1:63541)
+2025-09-15 16:07:36,296 - INFO - New WebSocket connection from ::1:55477
+2025-09-15 16:08:45,176 - INFO - Session ended (client: ::1:55477)
+2025-09-15 16:08:45,176 - INFO - Session ended (client: ::1:55477)
+2025-09-15 16:11:45,194 - INFO - New WebSocket connection from ::1:53353
+2025-09-15 16:13:32,769 - INFO - Session ended (client: ::1:53353)
+2025-09-15 16:13:32,769 - INFO - Session ended (client: ::1:53353)
+2025-09-15 16:17:43,462 - INFO - New WebSocket connection from ::1:52480
+2025-09-15 16:18:25,225 - INFO - Session ended (client: ::1:52480)
+2025-09-15 16:18:25,225 - INFO - Session ended (client: ::1:52480)
+2025-09-15 16:34:30,373 - INFO - New WebSocket connection from ::1:60459
+2025-09-15 16:35:49,370 - INFO - Session ended (client: ::1:60459)
+2025-09-15 16:35:49,370 - INFO - Session ended (client: ::1:60459)
+2025-09-15 18:22:20,193 - INFO - New WebSocket connection from ::1:53189
+2025-09-15 18:27:55,993 - INFO - New WebSocket connection from ::1:61147
+2025-09-15 18:27:55,993 - INFO - New WebSocket connection from ::1:61147
+2025-09-15 18:27:55,993 - INFO - New WebSocket connection from ::1:61147
+2025-09-15 18:31:29,570 - INFO - New WebSocket connection from ::1:50462
+2025-09-15 18:31:29,570 - INFO - New WebSocket connection from ::1:50462
+2025-09-15 18:31:29,570 - INFO - New WebSocket connection from ::1:50462
+2025-09-15 18:31:29,570 - INFO - New WebSocket connection from ::1:50462
+2025-09-15 18:31:29,570 - INFO - New WebSocket connection from ::1:50462
+2025-09-15 18:32:20,520 - INFO - Session ended (client: ::1:53189)
+2025-09-15 18:32:20,520 - INFO - Session ended (client: ::1:53189)
+2025-09-15 18:32:20,520 - INFO - Session ended (client: ::1:53189)
+2025-09-15 18:32:20,520 - INFO - Session ended (client: ::1:53189)
+2025-09-15 18:32:20,520 - INFO - Session ended (client: ::1:53189)
+2025-09-15 18:32:20,520 - INFO - Session ended (client: ::1:53189)
+2025-09-15 18:39:33,101 - INFO - Session ended (client: ::1:61147)
+2025-09-15 18:39:33,101 - INFO - Session ended (client: ::1:61147)
+2025-09-15 18:39:33,101 - INFO - Session ended (client: ::1:61147)
+2025-09-15 18:39:33,101 - INFO - Session ended (client: ::1:61147)
+2025-09-15 18:39:33,101 - INFO - Session ended (client: ::1:61147)
+2025-09-15 18:39:33,101 - INFO - Session ended (client: ::1:61147)
+2025-09-15 18:41:30,072 - INFO - Session ended (client: ::1:50462)
+2025-09-15 18:41:30,072 - INFO - Session ended (client: ::1:50462)
+2025-09-15 18:41:30,072 - INFO - Session ended (client: ::1:50462)
+2025-09-15 18:41:30,072 - INFO - Session ended (client: ::1:50462)
+2025-09-15 18:41:30,072 - INFO - Session ended (client: ::1:50462)
+2025-09-15 18:41:30,072 - INFO - Session ended (client: ::1:50462)
+2025-09-15 18:49:15,474 - INFO - New WebSocket connection from ::1:59806
+2025-09-15 18:49:15,474 - INFO - New WebSocket connection from ::1:59806
+2025-09-15 18:49:15,474 - INFO - New WebSocket connection from ::1:59806
+2025-09-15 18:49:15,474 - INFO - New WebSocket connection from ::1:59806
+2025-09-15 18:49:15,474 - INFO - New WebSocket connection from ::1:59806
+2025-09-15 18:49:15,474 - INFO - New WebSocket connection from ::1:59806
+2025-09-15 18:49:15,474 - INFO - New WebSocket connection from ::1:59806
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:18,461 - INFO - New WebSocket connection from ::1:60129
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:50:59,921 - INFO - New WebSocket connection from ::1:50178
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:52:16,232 - INFO - Session ended (client: ::1:50178)
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
+2025-09-15 18:53:17,524 - INFO - New WebSocket connection from ::1:54122
