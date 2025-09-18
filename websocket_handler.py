@@ -149,24 +149,23 @@ class PDFSyncManager:
     def __init__(self, form_id: Optional[str]):
         self.form_id = form_id
         self.full_sync_pending = False
-        self._direct_mode_checked = False
         self._direct_mode = False
         self._session_manager = None
 
     def _detect_direct_mode(self):
-        if self._direct_mode_checked:
+        # Try to enable direct mode once the HTTP server has registered the session.
+        # We keep attempting until it succeeds, then stay in direct mode.
+        if self._direct_mode:
             return
-        self._direct_mode_checked = True
         if not self.form_id:
             return
         try:
-            # Use the same session manager instance as HTTP server
             import server
             if server.session_manager.get_session(self.form_id) is not None:
                 self._direct_mode = True
                 self._session_manager = server.session_manager
         except Exception:  # noqa: BLE001
-            # Direct mode detection failed, will use HTTP fallback
+            # Continue using HTTP fallback
             pass
 
     async def sync_updates(self, applied: Dict[str, Any]):

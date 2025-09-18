@@ -320,6 +320,8 @@
     let pdfSchemaToOriginal = {}; // schema unique -> original
     let pdfJsDoc = null;
     const pdfFieldDomMap = new Map(); // original_name -> element(s)
+    const fieldKinds = {}; // schemaName -> kind ('text','checkbox','radio','choice')
+    const fieldAllowedValues = {}; // schemaName -> array of allowed values (for 'choice' or 'radio')
 
     // Removed profile state variables
 
@@ -688,6 +690,15 @@
                 console.log('[FRONTEND] Set pdfFormId to:', pdfFormId);
                 // Use geometric ordering from backend (already sorted) but keep explicit copy
                 pdfFieldsOrder = data.schema.fields.map(f=>f.name);
+                // Build kind map for better filled-count logic
+                try {
+                    data.schema.fields.forEach(f=>{
+                        fieldKinds[f.name] = f.field_type;
+                        if (Array.isArray(f.allowed_values)) {
+                            fieldAllowedValues[f.name] = f.allowed_values.slice();
+                        }
+                    });
+                } catch(_){ }
                 pdfState = {}; pdfConfirmed = {}; pdfFieldsOrder.forEach(n=>{ pdfState[n]=null; pdfConfirmed[n]=false; });
                 // Extra metadata warnings
                 const meta = pdfSchema.metadata || {};
@@ -759,13 +770,20 @@
         function refreshPdfFieldSummary(){
             if(!pdfSchema){ pdfFieldSummary.textContent=''; return; }
             let total = pdfFieldsOrder.length;
-            // Consider a field filled if it has a non-empty string, a finite number, true boolean, or non-null object/array
-            let filled = Object.values(pdfState).filter(v=>{
+            // Consider checkboxes filled when explicitly answered (true OR false).
+            let filled = pdfFieldsOrder.filter(name=>{
+                const v = pdfState[name];
+                const kind = fieldKinds[name];
                 if(v === null || v === undefined) return false;
+                if(kind === 'checkbox'){
+                    if(typeof v === 'boolean') return true;
+                    if(typeof v === 'string') { const lc=v.trim().toLowerCase(); return lc==='true' || lc==='false'; }
+                    return false;
+                }
                 if(typeof v === 'string') return v.trim().length>0;
-                if(typeof v === 'boolean') return v === true; // only true counts for checkboxes
+                if(typeof v === 'boolean') return v === true;
                 if(typeof v === 'number') return true;
-                return true; // objects (e.g., future structured) count
+                return true;
             }).length;
             pdfFieldSummary.textContent = `${filled} of ${total} fields filled.`;
         }
@@ -852,6 +870,8 @@
                 }
 
                 collectPdfJsFormFields(pdfPagesEl);
+                // Upgrade any text inputs that correspond to choice fields into <select>
+                try { upgradeChoiceControlsFromSchema(); } catch(e){ AppLogger.warn('upgradeChoiceControlsFromSchema failed', e); }
                 AppLogger.info('PDF rendered; collected form elements', pdfFieldDomMap.size);
                 pdfFormCard.style.display='block';
                 voiceAssistantToggle.style.display='block';
@@ -872,10 +892,53 @@
                 el.addEventListener('change', () => {
                     const schemaName = pdfOriginalToSchema[name] || name;
                     let value;
-                    if(el.type === 'checkbox') value = el.checked; else if(el.type === 'radio'){ if(el.checked) value=el.value; else return; } else value = el.value;
+                    if(el.type === 'checkbox') value = el.checked;
+                    else if(el.type === 'radio'){ if(el.checked) value=el.value; else return; }
+                    else value = el.value;
                     pdfState[schemaName] = value; refreshPdfFieldSummary();
                     if(webSocket && webSocket.readyState===WebSocket.OPEN){ sendUserEdit(schemaName, value); }
                 });
+            });
+        }
+
+        // Replace plain text inputs with <select> for known 'choice' fields using schema.allowed_values
+        function upgradeChoiceControlsFromSchema(){
+            // Build a quick lookup of schema field by name
+            const schemaByName = {};
+            try { (pdfSchema.fields||[]).forEach(f=> schemaByName[f.name]=f); } catch(_){}
+            pdfFieldDomMap.forEach((els, originalName) => {
+                const schemaName = pdfOriginalToSchema[originalName] || originalName;
+                const meta = schemaByName[schemaName];
+                if(!meta) return;
+                if(meta.field_type !== 'choice') return;
+                const options = Array.isArray(meta.allowed_values) ? meta.allowed_values : [];
+                if(options.length === 0) return;
+                const replaced = [];
+                els.forEach((el) => {
+                    if(el.tagName.toLowerCase() === 'select') { return; }
+                    // Only replace text-like controls
+                    if(el.tagName.toLowerCase() !== 'input' && el.tagName.toLowerCase() !== 'textarea') return;
+                    // Create a select element mirroring geometry/styles
+                    const sel = document.createElement('select');
+                    sel.name = el.name || originalName;
+                    sel.style.cssText = el.style.cssText;
+                    sel.className = el.className;
+                    // Populate options
+                    const empty = document.createElement('option'); empty.value=''; empty.textContent=''; sel.appendChild(empty);
+                    options.forEach(opt => { const o=document.createElement('option'); o.value=String(opt); o.textContent=String(opt); sel.appendChild(o); });
+                    // Set current value if any
+                    const current = pdfState[schemaName]; if(current!=null){ sel.value = String(current); }
+                    // Wire change handler similar to collect
+                    sel.addEventListener('change', ()=>{
+                        const value = sel.value;
+                        pdfState[schemaName] = value; refreshPdfFieldSummary();
+                        if(webSocket && webSocket.readyState===WebSocket.OPEN){ sendUserEdit(schemaName, value); }
+                    });
+                    // Replace in DOM
+                    el.parentNode && el.parentNode.replaceChild(sel, el);
+                    replaced.push(sel);
+                });
+                if(replaced.length){ pdfFieldDomMap.set(originalName, replaced); }
             });
         }
 
@@ -884,7 +947,16 @@
                 const schemaName = pdfOriginalToSchema[originalName] || originalName;
                 const val = pdfState[schemaName];
                 els.forEach(el => {
-                    if(el.type === 'checkbox') el.checked = !!val; else if(el.type === 'radio') el.checked = (el.value===val); else if(val!==undefined && val!==null) el.value = val;
+                    if(el.type === 'checkbox'){
+                        if(typeof val === 'string') el.checked = (val.trim().toLowerCase()==='true');
+                        else el.checked = !!val;
+                    } else if(el.type === 'radio'){
+                        el.checked = (el.value===val);
+                    } else if(el.tagName && el.tagName.toLowerCase()==='select'){
+                        if(val!==undefined && val!==null){ el.value = String(val); }
+                    } else if(val!==undefined && val!==null){
+                        el.value = val;
+                    }
                 });
             });
         }

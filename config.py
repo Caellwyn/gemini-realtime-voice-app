@@ -27,6 +27,15 @@ LATENCY_MEASUREMENT_INTERVAL = 30  # Seconds between latency measurements
 DEFAULT_MODEL = "gemini-2.5-flash-preview-native-audio-dialog"
 ALTERNATIVE_MODEL = "gemini-2.0-flash-live-001"
 
+# LLM Field Normalization (optional)
+# When enabled, the server will call an LLM to generate friendly display names,
+# short spoken prompts, and grouping hints for PDF fields during upload.
+ENABLE_LLM_FIELD_NORMALIZATION = True
+LLM_NORMALIZER_MODEL = "gemini-2.5-flash-lite"
+LLM_NORMALIZER_MAX_FIELDS = 120  # guardrail for very large forms
+LLM_NORMALIZER_NEAR_TEXT_RADIUS = 36  # px search window around widgets
+LLM_NORMALIZER_TEMPERATURE = 0.2
+
 # Audio Configuration
 AUDIO_MIME_TYPE = "audio/pcm;rate=16000"
 AUDIO_RATE = 16000
@@ -37,7 +46,7 @@ PDF_FORM_INSTRUCTION_TEMPLATE = (
     "CRITICAL: After EVERY user utterance that provides field values, you MUST call update_pdf_fields immediately to save those values. "
     "Never guess or invent. Ask only for the NEXT missing field in visual order unless the user voluntarily gives multiple in one utterance. "
     "If uncertain about progress call get_form_state. When the user provides ANY field value(s), IMMEDIATELY call update_pdf_fields with an 'updates' parameter containing a JSON string mapping field names to values, e.g. '{{\"FirstName\": \"Alice\", \"LastName\": \"Smith\"}}'. "
-    "The updates parameter must be a valid JSON string. Do not restate unchanged fields. ALWAYS call the tool when values are provided, then ask for the next field. After all fields are filled ask for a single confirmation. After user confirms stop. No chit-chat."
+    "The updates parameter must be a valid JSON string. Do not restate unchanged fields. ALWAYS call the tool when values are provided, then ask for the next field. For radio/choice fields, ONLY use one of the Allowed values listed for that field in the initial message; do not reuse checkbox labels as values. After all fields are filled ask for a single confirmation. After user confirms stop. No chit-chat."
 )
 
 # Field Value Limits
@@ -63,7 +72,7 @@ PDF_TOOL_DECLARATIONS = [
         "description": (
             "Update one or more PDF form fields explicitly provided by the user. "
             "Field types: text (string), checkbox (boolean true/false), radio (one value from its allowed list), choice (one value from allowed list). "
-            "For checkbox you MUST send true or false (strings like 'true'/'false' acceptable). For radio/choice you MUST use an allowed value exactly as shown. "
+            "For checkbox you MUST send true or false (strings like 'true'/'false' acceptable). For radio/choice you MUST use an allowed value exactly as shown for that specific field (see Allowed values list in the initial message). Do NOT use nearby checkbox labels as dropdown/radio values. "
             "Batch multiple fields only if the user clearly supplied them together."
         ),
         "parameters": {

@@ -20,6 +20,9 @@ from config import (
 )
 from session_manager import get_session_manager
 from pdf_extractor import PDFExtractor
+from config import ENABLE_LLM_FIELD_NORMALIZATION
+from pdf_form.llm_normalizer import normalize_fields
+from form_manager import extract_pdf_form_metadata_from_bytes
 
 storage_manager = FormStorageManager()
 storage_manager.start_background_cleanup()
@@ -138,6 +141,56 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
                 schema.metadata['original_to_schema'] = reverse_map
             except Exception:
                 pass
+
+            # Optional: LLM-based normalization for display names, prompts, and groups
+            try:
+                if ENABLE_LLM_FIELD_NORMALIZATION:
+                    raw_fields = extract_pdf_form_metadata_from_bytes(file_bytes)
+                    norm = normalize_fields(file_bytes, raw_fields)
+                    by_index = norm.get("by_index", {})
+                    groups = norm.get("groups", [])
+
+                    # Apply display names in visual/index order (schema is already ordered)
+                    for idx, field in enumerate(schema.fields):
+                        n = by_index.get(idx)
+                        if not n:
+                            continue
+                        dn = (n.get("display_name") or "").strip()
+                        if dn:
+                            field.display_name = dn[:80]
+
+                    # Store metadata for UI/agent consumption
+                    schema.metadata.setdefault("llm_normalized", True)
+                    # Spoken prompts per index
+                    prompts = {}
+                    for idx, n in by_index.items():
+                        sp = (n.get("spoken_prompt") or "").strip()
+                        if sp:
+                            prompts[str(idx)] = sp[:140]
+                    if prompts:
+                        schema.metadata["spoken_prompts"] = prompts
+                    if groups:
+                        schema.metadata["groups"] = groups
+            except Exception as _e:
+                # Non-fatal if normalizer fails
+                pass
+
+            # Build a unique display alias map -> canonical schema name ALWAYS (even without LLM)
+            try:
+                alias_to_canonical = {}
+                display_counts = {}
+                for field in schema.fields:
+                    disp = (field.display_name or field.name).strip() or field.name
+                    base = disp
+                    if base in display_counts:
+                        display_counts[base] += 1
+                        disp = f"{base} #{display_counts[base]}"
+                    else:
+                        display_counts[base] = 1
+                    alias_to_canonical[disp] = field.name
+                schema.metadata["display_alias_to_canonical"] = alias_to_canonical
+            except Exception:
+                pass
             
             # Create session using session manager
             session = session_manager.create_session(form_id, schema)
@@ -154,15 +207,24 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             print(f"[upload] public_dict form_id: {public_dict['form_id']}")
             print(f"[upload] Are they equal? {form_id == public_dict['form_id']}")
             
-            # Ensure response schema metadata reflects updated maps
+            # Replace response schema with the updated public dict (includes display names & metadata)
             try:
-                response['schema']['metadata']['write_name_map'] = schema.metadata.get('write_name_map', {})
-                response['schema']['metadata']['original_to_schema'] = schema.metadata.get('original_to_schema', {})
+                response['schema'] = schema.to_public_dict()
             except Exception:
-                pass
+                # Fallback: at least update known metadata fields if replacement fails
+                try:
+                    response['schema']['metadata']['write_name_map'] = schema.metadata.get('write_name_map', {})
+                    response['schema']['metadata']['original_to_schema'] = schema.metadata.get('original_to_schema', {})
+                except Exception:
+                    pass
 
             # Add replacement info to response
             response['replaced_previous'] = replaced_previous
+            # Ensure response schema reflects any updated display names and metadata
+            try:
+                response['schema'] = schema.to_public_dict()
+            except Exception:
+                pass
             
             self._send_json(response, 200)
         except Exception as e:

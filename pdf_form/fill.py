@@ -102,20 +102,27 @@ def fill_acroform(original_pdf_bytes: bytes, values: Dict[str, Any]) -> bytes:
                                     widget.update({NameObject("/AS"): NameObject("/Off")})
                     else:
                         # Radio group (multiple kids); set selected and clear others
-                        if isinstance(supplied, str):
-                            target_state = supplied
-                        else:
-                            target_state = None
+                        target_state = supplied if isinstance(supplied, str) else None
                         if target_state:
+                            target_match = target_state.lstrip("/")
                             for kid in kids:
                                 try:
                                     ap = kid.get("/AP")
                                     if ap and ap.get("/N"):
+                                        matched_any = False
                                         for state_name in ap.get("/N").keys():
-                                            if state_name.lstrip("/") == target_state:
+                                            # Compare normalized without leading slash
+                                            if state_name.lstrip("/") == target_match:
                                                 kid.update({NameObject("/AS"): NameObject(state_name)})
                                                 f.update({NameObject("/V"): NameObject(state_name)})
+                                                matched_any = True
                                                 break
+                                        if not matched_any:
+                                            # Explicitly set Off for non-selected widgets
+                                            try:
+                                                kid.update({NameObject("/AS"): NameObject("/Off")})
+                                            except Exception:
+                                                pass
                                 except Exception:
                                     continue
             except Exception:

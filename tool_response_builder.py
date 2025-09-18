@@ -192,6 +192,12 @@ class ToolCallHandler:
             if update_result.get("applied"):
                 await pdf_sync.sync_updates(update_result.get("applied", {}))
                 await pdf_sync.schedule_full_sync(form_manager)
+                # Also include a current state snapshot for UI reconciliation
+                try:
+                    state_snapshot = form_manager.get_state_snapshot()
+                    builder.add_state_response(tool_call, state_snapshot, "form_state")
+                except Exception:
+                    pass
         
         return await builder.finalize(client_websocket)
 
